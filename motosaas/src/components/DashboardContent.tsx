@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import LogoutButton from '@/components/LogoutButton'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
+import MobileNav from '@/components/MobileNav'
 import { useI18n } from '@/lib/i18n'
 
 interface DashboardContentProps {
@@ -21,6 +22,7 @@ export default function DashboardContent({ user, userProfile, tenant, trialDaysR
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center space-x-8">
+              <MobileNav />
               <Link href="/dashboard" className="text-xl font-bold text-gray-900">
                 MotoRent
               </Link>
