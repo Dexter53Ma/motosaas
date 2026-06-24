@@ -53,6 +53,9 @@ export default async function DashboardPage() {
                 <Link href="/dashboard/rentals" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium">
                   Rentals
                 </Link>
+                <Link href="/dashboard/payments" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium">
+                  Payments
+                </Link>
               </div>
             </div>
             <div className="flex items-center space-x-4">
