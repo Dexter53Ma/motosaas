@@ -1,20 +1,28 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
+import { toast } from 'sonner'
+import { PageTransition } from '@/components/PageTransition'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { BookOpen, Video, MessageCircle, ChevronDown, CheckCircle } from 'lucide-react'
+import { useI18n } from '@/lib/i18n'
 
 const FAQ_ITEMS = [
   {
     question: 'How do I add a new vehicle?',
-    answer: 'Go to Vehicles → Add Vehicle. Fill in the make, model, year, license plate, and daily rate. You can also add photos and maintenance history.',
+    answer: 'Go to Vehicles â†’ Add Vehicle. Fill in the make, model, year, license plate, and daily rate. You can also add photos and maintenance history.',
   },
   {
     question: 'How do I create a rental?',
-    answer: 'Go to Rentals → New Rental. Select a customer and vehicle, set the rental dates, and the system will automatically calculate the total amount.',
+    answer: 'Go to Rentals â†’ New Rental. Select a customer and vehicle, set the rental dates, and the system will automatically calculate the total amount.',
   },
   {
     question: 'How do I record a payment?',
-    answer: 'Go to Payments → Record Payment. Select the customer and rental, enter the amount and payment method (cash, card, bank transfer, or mobile money).',
+    answer: 'Go to Payments â†’ Record Payment. Select the customer and rental, enter the amount and payment method (cash, card, bank transfer, or mobile money).',
   },
   {
     question: 'How do I send a WhatsApp reminder?',
@@ -22,11 +30,11 @@ const FAQ_ITEMS = [
   },
   {
     question: 'Can I track vehicle damage?',
-    answer: 'Yes! Go to any vehicle → Damage History. You can report damage with photos, track repair status, and monitor damage costs.',
+    answer: 'Yes! Go to any vehicle â†’ Damage History. You can report damage with photos, track repair status, and monitor damage costs.',
   },
   {
     question: 'How do I generate an invoice?',
-    answer: 'Go to any rental → Generate Invoice. The system will create a professional invoice with TVA (20%) that you can download or send via WhatsApp.',
+    answer: 'Go to any rental â†’ Generate Invoice. The system will create a professional invoice with TVA (20%) that you can download or send via WhatsApp.',
   },
   {
     question: 'Is there a mobile app?',
@@ -34,11 +42,12 @@ const FAQ_ITEMS = [
   },
   {
     question: 'How do I invite team members?',
-    answer: 'Go to Settings → Team. Click Invite Member and enter their email address. They\'ll receive an invitation to join your shop.',
+    answer: 'Go to Settings â†’ Team. Click Invite Member and enter their email address. They\'ll receive an invitation to join your shop.',
   },
 ]
 
 export default function HelpPage() {
+  const { t } = useI18n()
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [contactForm, setContactForm] = useState({ name: '', email: '', subject: '', message: '' })
   const [sending, setSending] = useState(false)
@@ -47,149 +56,170 @@ export default function HelpPage() {
   async function handleContact(e: React.FormEvent) {
     e.preventDefault()
     setSending(true)
-    await new Promise(r => setTimeout(r, 1000))
-    setSending(false)
-    setSent(true)
-    setContactForm({ name: '', email: '', subject: '', message: '' })
+
+    try {
+      const supabase = createClient()
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+      if (authError || !user) {
+        toast.error('You must be logged in to submit a ticket')
+        setSending(false)
+        return
+      }
+
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single()
+
+      if (userError || !userData) {
+        toast.error('Could not find your account')
+        setSending(false)
+        return
+      }
+
+      const { error: insertError } = await supabase.from('support_tickets').insert({
+        tenant_id: userData.tenant_id,
+        user_id: user.id,
+        subject: contactForm.subject,
+        description: `From: ${contactForm.name} (${contactForm.email})\n\n${contactForm.message}`,
+        status: 'open',
+        priority: 'medium',
+      })
+
+      if (insertError) throw insertError
+
+      setSent(true)
+      toast.success('Message sent successfully!')
+      setContactForm({ name: '', email: '', subject: '', message: '' })
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to send message')
+    } finally {
+      setSending(false)
+    }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center space-x-8">
-              <Link href="/dashboard" className="text-xl font-bold text-gray-900">MotoRent</Link>
-              <h1 className="text-lg font-medium">Help & Support</h1>
-            </div>
-          </div>
-        </div>
-      </nav>
-
+    <PageTransition>
       <main className="max-w-4xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         {/* Quick Links */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="bg-white rounded-lg shadow p-6 text-center">
-            <span className="text-3xl mb-2 block">📚</span>
-            <h3 className="font-medium mb-1">Documentation</h3>
-            <p className="text-sm text-gray-500 mb-3">Learn how to use all features</p>
-            <button className="text-blue-600 text-sm hover:underline">Coming Soon</button>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6 text-center">
-            <span className="text-3xl mb-2 block">🎥</span>
-            <h3 className="font-medium mb-1">Video Tutorials</h3>
-            <p className="text-sm text-gray-500 mb-3">Watch step-by-step guides</p>
-            <button className="text-blue-600 text-sm hover:underline">Coming Soon</button>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6 text-center">
-            <span className="text-3xl mb-2 block">💬</span>
-            <h3 className="font-medium mb-1">Live Chat</h3>
-            <p className="text-sm text-gray-500 mb-3">Chat with our support team</p>
-            <button className="text-blue-600 text-sm hover:underline">Coming Soon</button>
-          </div>
+          {[
+            { icon: BookOpen, title: 'Documentation', desc: 'Learn how to use all features' },
+            { icon: Video, title: 'Video Tutorials', desc: 'Watch step-by-step guides' },
+            { icon: MessageCircle, title: 'Live Chat', desc: 'Chat with our support team' },
+          ].map((item, i) => (
+            <Card key={i} className="text-center">
+              <CardContent>
+                <item.icon className="h-8 w-8 mx-auto mb-2 text-emerald-600" />
+                <h3 className="font-medium mb-1">{item.title}</h3>
+                <p className="text-sm text-gray-500 mb-3">{item.desc}</p>
+                <Button variant="ghost" size="sm" className="text-emerald-600 hover:text-emerald-700">
+                  Coming Soon
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
         {/* FAQ */}
-        <div className="bg-white rounded-lg shadow mb-8">
-          <div className="p-4 border-b">
-            <h2 className="text-lg font-medium">Frequently Asked Questions</h2>
-          </div>
-          <div className="divide-y">
-            {FAQ_ITEMS.map((item, index) => (
-              <div key={index}>
-                <button
-                  onClick={() => setOpenFaq(openFaq === index ? null : index)}
-                  className="w-full px-4 py-4 text-left flex items-center justify-between hover:bg-gray-50"
-                >
-                  <span className="font-medium">{item.question}</span>
-                  <span className={`transform transition-transform ${openFaq === index ? 'rotate-180' : ''}`}>
-                    ▼
-                  </span>
-                </button>
-                {openFaq === index && (
-                  <div className="px-4 pb-4 text-gray-600">
-                    {item.answer}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>{t("help.faq")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="divide-y">
+              {FAQ_ITEMS.map((item, index) => (
+                <div key={index}>
+                  <button
+                    onClick={() => setOpenFaq(openFaq === index ? null : index)}
+                    className="w-full px-4 py-4 text-left flex items-center justify-between hover:bg-gray-50"
+                  >
+                    <span className="font-medium">{item.question}</span>
+                    <ChevronDown
+                      className={`h-5 w-5 transition-transform ${openFaq === index ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                  {openFaq === index && (
+                    <div className="px-4 pb-4 text-gray-600">
+                      {item.answer}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Contact Form */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-4 border-b">
-            <h2 className="text-lg font-medium">Contact Support</h2>
-          </div>
-          <div className="p-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("help.contact_support")}</CardTitle>
+          </CardHeader>
+          <CardContent>
             {sent ? (
               <div className="text-center py-8">
-                <span className="text-4xl mb-4 block">✅</span>
-                <h3 className="font-medium text-lg mb-2">Message Sent!</h3>
-                <p className="text-gray-600">We'll get back to you within 24 hours.</p>
-                <button
+                <CheckCircle className="h-12 w-12 mx-auto mb-4 text-emerald-600" />
+                <h3 className="font-medium text-lg mb-2">{t("help.message_sent")}</h3>
+                <p className="text-gray-600">{t("help.get_back")}</p>
+                <Button
+                  variant="ghost"
                   onClick={() => setSent(false)}
-                  className="mt-4 px-4 py-2 text-blue-600 hover:underline"
+                  className="mt-4 text-emerald-600 hover:text-emerald-700"
                 >
                   Send another message
-                </button>
+                </Button>
               </div>
             ) : (
               <form onSubmit={handleContact} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                    <input
+                    <Label>Name</Label>
+                    <Input
                       type="text"
                       value={contactForm.name}
                       onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
                       required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                    <input
+                    <Label>Email</Label>
+                    <Input
                       type="email"
                       value={contactForm.email}
                       onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
                       required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
-                  <input
+                  <Label>{t("help.subject")}</Label>
+                  <Input
                     type="text"
                     value={contactForm.subject}
                     onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                  <Label>{t("help.message")}</Label>
                   <textarea
                     value={contactForm.message}
                     onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
                     required
                     rows={4}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full min-h-[80px] rounded-lg border border-input bg-transparent px-2.5 py-1 text-base md:text-sm placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
                   />
                 </div>
-                <button
-                  type="submit"
-                  disabled={sending}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
+                <Button type="submit" disabled={sending} className="bg-emerald-600 hover:bg-emerald-700">
                   {sending ? 'Sending...' : 'Send Message'}
-                </button>
+                </Button>
               </form>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </main>
-    </div>
+    </PageTransition>
   )
 }

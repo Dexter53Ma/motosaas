@@ -2,9 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import Link from 'next/link'
+import { PageTransition } from '@/components/PageTransition'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Plus, Trash2, Edit, MapPin } from 'lucide-react'
+import { useI18n } from '@/lib/i18n'
 
 export default function LocationsPage() {
+  const { t } = useI18n()
   const [locations, setLocations] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -19,16 +26,31 @@ export default function LocationsPage() {
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [tenantId, setTenantId] = useState<string | null>(null)
   const supabase = createClient()
 
-  useEffect(() => { fetchLocations() }, [])
+  useEffect(() => {
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setLoading(false); return }
+      const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).single()
+      if (!userData?.tenant_id) { setLoading(false); return }
+      setTenantId(userData.tenant_id)
+      await fetchLocations(userData.tenant_id)
+    }
+    init()
+  }, [])
 
-  async function fetchLocations() {
+  async function fetchLocations(tid?: string) {
     setLoading(true)
 
-    const { data } = await supabase
+    let query = supabase
       .from('locations')
       .select('*')
+
+    if (tid) query = query.eq('tenant_id', tid)
+
+    const { data } = await query
       .order('is_main', { ascending: false })
       .order('name')
 
@@ -77,7 +99,7 @@ export default function LocationsPage() {
       setShowForm(false)
       setEditingLocation(null)
       setFormData({ name: '', address: '', city: '', phone: '', email: '', is_main: false })
-      await fetchLocations()
+      if (tenantId) await fetchLocations(tenantId)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -106,7 +128,7 @@ export default function LocationsPage() {
       .delete()
       .eq('id', id)
 
-    if (!error) await fetchLocations()
+    if (!error && tenantId) await fetchLocations(tenantId)
   }
 
   async function toggleActive(id: string, currentStatus: boolean) {
@@ -115,91 +137,66 @@ export default function LocationsPage() {
       .update({ is_active: !currentStatus })
       .eq('id', id)
 
-    if (!error) await fetchLocations()
+    if (!error && tenantId) await fetchLocations(tenantId)
   }
 
   if (loading) {
-    return <div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>
+    return <div className="flex items-center justify-center h-64 text-gray-500">{t('common.loading')}</div>
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center space-x-8">
-              <Link href="/dashboard" className="text-xl font-bold text-gray-900">MotoRent</Link>
-              <h1 className="text-lg font-medium">Locations</h1>
-            </div>
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => { setShowForm(true); setEditingLocation(null); setFormData({ name: '', address: '', city: '', phone: '', email: '', is_main: false }) }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Add Location
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        {/* Form Modal */}
-        {showForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-              <div className="p-4 border-b">
-                <h3 className="font-medium">{editingLocation ? 'Edit Location' : 'Add Location'}</h3>
-              </div>
-              <form onSubmit={handleSubmit} className="p-4 space-y-4">
+    <PageTransition>
+      {showForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="max-w-md w-full mx-4">
+            <CardHeader>
+              <CardTitle>{editingLocation ? t('locations.edit') : t('locations.add')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
-                  <input
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('locations.name')} *</label>
+                  <Input
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     placeholder="e.g., Main Shop"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                  <input
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('locations.address')}</label>
+                  <Input
                     type="text"
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     placeholder="Street address"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-                  <input
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('locations.city')}</label>
+                  <Input
                     type="text"
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     placeholder="e.g., Casablanca"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                  <input
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('locations.phone')}</label>
+                  <Input
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     placeholder="+212 6XX-XXXXXX"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('locations.email')}</label>
+                  <Input
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     placeholder="location@example.com"
                   />
                 </div>
@@ -209,42 +206,57 @@ export default function LocationsPage() {
                     id="is_main"
                     checked={formData.is_main}
                     onChange={(e) => setFormData({ ...formData, is_main: e.target.checked })}
-                    className="h-4 w-4 text-blue-600 rounded"
+                    className="h-4 w-4 text-emerald-500 rounded"
                   />
-                  <label htmlFor="is_main" className="text-sm text-gray-700">Main location</label>
+                  <label htmlFor="is_main" className="text-sm text-gray-700">{t('locations.main')}</label>
                 </div>
                 {error && <p className="text-red-600 text-sm">{error}</p>}
                 <div className="flex gap-2">
-                  <button
+                  <Button
                     type="submit"
                     disabled={saving || !formData.name}
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white"
                   >
-                    {saving ? 'Saving...' : editingLocation ? 'Update' : 'Create'}
-                  </button>
-                  <button
+                    {saving ? t('common.loading') : editingLocation ? t('common.edit') : t('common.create')}
+                  </Button>
+                  <Button
                     type="button"
+                    variant="outline"
                     onClick={() => { setShowForm(false); setEditingLocation(null); setError('') }}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                   >
-                    Cancel
-                  </button>
+                    {t('common.cancel')}
+                  </Button>
                 </div>
               </form>
-            </div>
-          </div>
-        )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
-        {/* Locations Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {locations.map((location) => (
-            <div key={location.id} className="bg-white rounded-lg shadow p-4">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{t('locations.title')}</h1>
+        </div>
+        <Button
+          onClick={() => { setShowForm(true); setEditingLocation(null); setFormData({ name: '', address: '', city: '', phone: '', email: '', is_main: false }) }}
+          className="bg-emerald-500 hover:bg-emerald-600 text-white"
+        >
+          <Plus className="size-4 mr-2" />
+          {t('locations.add')}
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {locations.map((location) => (
+          <Card key={location.id}>
+            <CardContent className="p-4">
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2">
+                    <MapPin className="size-4 text-emerald-500" />
                     <h3 className="font-medium">{location.name}</h3>
                     {location.is_main && (
-                      <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs">Main</span>
+                      <Badge className="bg-emerald-100 text-emerald-800">{t('locations.main_badge')}</Badge>
                     )}
                   </div>
                   {location.address && (
@@ -254,55 +266,54 @@ export default function LocationsPage() {
                     <p className="text-sm text-gray-600">{location.city}</p>
                   )}
                   {location.phone && (
-                    <p className="text-sm text-gray-500 mt-2">📞 {location.phone}</p>
+                    <p className="text-sm text-gray-500 mt-2">{location.phone}</p>
                   )}
                   {location.email && (
-                    <p className="text-sm text-gray-500">✉️ {location.email}</p>
+                    <p className="text-sm text-gray-500">{location.email}</p>
                   )}
                 </div>
               </div>
               <div className="flex gap-2 mt-4">
-                <button
-                  onClick={() => startEdit(location)}
-                  className="flex-1 px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50"
-                >
-                  Edit
-                </button>
-                <button
+                <Button variant="outline" size="sm" className="flex-1" onClick={() => startEdit(location)}>
+                  <Edit className="size-3 mr-1" />
+                  {t('common.edit')}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={location.is_active ? 'text-emerald-600 border-emerald-300' : 'text-gray-600'}
                   onClick={() => toggleActive(location.id, location.is_active)}
-                  className={`px-3 py-1 text-sm rounded ${
-                    location.is_active
-                      ? 'text-green-600 border border-green-300 hover:bg-green-50'
-                      : 'text-gray-600 border border-gray-300 hover:bg-gray-50'
-                  }`}
                 >
-                  {location.is_active ? 'Active' : 'Inactive'}
-                </button>
+                  {location.is_active ? t('locations.active') : t('locations.inactive')}
+                </Button>
                 {!location.is_main && (
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-500"
                     onClick={() => deleteLocation(location.id)}
-                    className="px-3 py-1 text-sm text-red-600 border border-red-300 rounded hover:bg-red-50"
                   >
-                    Delete
-                  </button>
+                    <Trash2 className="size-3" />
+                  </Button>
                 )}
               </div>
-            </div>
-          ))}
-        </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
-        {locations.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500 mb-4">No locations yet</p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              Add Your First Location
-            </button>
-          </div>
-        )}
-      </main>
-    </div>
+      {locations.length === 0 && (
+        <div className="text-center py-12">
+          <MapPin className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+          <p className="text-gray-500 mb-4">{t('locations.empty')}</p>
+          <Button
+            onClick={() => setShowForm(true)}
+            className="bg-emerald-500 hover:bg-emerald-600 text-white"
+          >
+            Add Your First Location
+          </Button>
+        </div>
+      )}
+    </PageTransition>
   )
 }

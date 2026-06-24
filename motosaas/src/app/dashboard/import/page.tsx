@@ -2,15 +2,21 @@
 
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import Link from 'next/link'
-
-const IMPORT_TYPES = [
-  { id: 'customers', label: 'Customers', description: 'Import customer data from CSV' },
-  { id: 'vehicles', label: 'Vehicles', description: 'Import vehicle inventory from CSV' },
-  { id: 'payments', label: 'Payments', description: 'Import payment history from CSV' },
-]
+import { PageTransition } from '@/components/PageTransition'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Upload, CheckCircle, AlertTriangle } from 'lucide-react'
+import { useI18n } from '@/lib/i18n'
 
 export default function ImportPage() {
+  const { t } = useI18n()
+  const IMPORT_TYPES = [
+    { id: 'customers', label: t('import.customers_tab'), description: t('import.desc') },
+    { id: 'vehicles', label: t('import.vehicles_tab'), description: t('import.desc') },
+    { id: 'payments', label: t('import.payments_tab'), description: t('import.desc') },
+  ]
+
   const [selectedType, setSelectedType] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<any[]>([])
@@ -98,7 +104,7 @@ export default function ImportPage() {
               customer_id: row.customer_id,
               amount: parseFloat(row.amount) || 0,
               payment_method: row.payment_method || row.method || 'cash',
-              reference: row.reference || row.ref || '',
+              reference_number: row.reference_number || row.reference || row.ref || '',
             }
             const { error } = await supabase.from('payments').insert(insertData)
             if (error) throw error
@@ -119,130 +125,134 @@ export default function ImportPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center space-x-8">
-              <Link href="/dashboard" className="text-xl font-bold text-gray-900">MotoRent</Link>
-              <h1 className="text-lg font-medium">Import Data</h1>
-            </div>
-          </div>
+    <PageTransition>
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">{t('import.title')}</h1>
+          <p className="text-gray-600">{t('import.desc')}</p>
         </div>
-      </nav>
 
-      <main className="max-w-4xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        {/* Type Selection */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {IMPORT_TYPES.map((type) => (
-            <button
+            <Card
               key={type.id}
-              onClick={() => { setSelectedType(type.id); setResult(null); setFile(null); setPreview([]) }}
-              className={`p-4 rounded-lg border text-left ${
+              className={`cursor-pointer transition-colors ${
                 selectedType === type.id
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-emerald-500 bg-emerald-50'
+                  : 'hover:border-gray-300'
               }`}
+              onClick={() => { setSelectedType(type.id); setResult(null); setFile(null); setPreview([]) }}
             >
-              <h3 className="font-medium">{type.label}</h3>
-              <p className="text-sm text-gray-500">{type.description}</p>
-            </button>
+              <CardContent className="p-4">
+                <h3 className="font-medium">{type.label}</h3>
+                <p className="text-sm text-gray-500">{type.description}</p>
+              </CardContent>
+            </Card>
           ))}
         </div>
 
         {selectedType && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-medium mb-4">
-              Import {selectedType.charAt(0).toUpperCase() + selectedType.slice(1)}
-            </h2>
-
-            {/* File Upload */}
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500 mb-6"
-            >
-              {file ? (
-                <div>
-                  <p className="font-medium">{file.name}</p>
-                  <p className="text-sm text-gray-500">{(file.size / 1024).toFixed(1)} KB</p>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-gray-600">Click to upload CSV file</p>
-                  <p className="text-sm text-gray-500 mt-1">Make sure columns match the expected format</p>
-                </div>
-              )}
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-
-            {/* Preview */}
-            {preview.length > 0 && (
-              <div className="mb-6">
-                <h3 className="font-medium mb-2">Preview (first 5 rows)</h3>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        {Object.keys(preview[0]).map((key) => (
-                          <th key={key} className="px-3 py-2 text-left font-medium text-gray-700">
-                            {key}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {preview.map((row, i) => (
-                        <tr key={i} className="border-b">
-                          {Object.values(row).map((val, j) => (
-                            <td key={j} className="px-3 py-2 text-gray-600">
-                              {String(val)}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
-
-            {/* Result */}
-            {result && (
-              <div className={`p-4 rounded-lg mb-4 ${result.errors.length === 0 ? 'bg-green-50' : 'bg-yellow-50'}`}>
-                <p className="font-medium">
-                  {result.success} rows imported successfully
-                </p>
-                {result.errors.length > 0 && (
-                  <div className="mt-2">
-                    <p className="text-sm text-red-600">{result.errors.length} errors:</p>
-                    <ul className="text-sm text-red-600 mt-1 list-disc list-inside">
-                      {result.errors.slice(0, 5).map((err, i) => (
-                        <li key={i}>{err}</li>
-                      ))}
-                    </ul>
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                Import {selectedType.charAt(0).toUpperCase() + selectedType.slice(1)}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-emerald-500 mb-6"
+              >
+                {file ? (
+                  <div>
+                    <p className="font-medium">{file.name}</p>
+                    <p className="text-sm text-gray-500">{(file.size / 1024).toFixed(1)} KB</p>
+                  </div>
+                ) : (
+                  <div>
+                    <Upload className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+                    <p className="text-gray-600">{t('import.click_upload')}</p>
+                    <p className="text-sm text-gray-500 mt-1">{t('import.format_note')}</p>
                   </div>
                 )}
               </div>
-            )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleFileChange}
+                className="hidden"
+              />
 
-            <button
-              onClick={handleImport}
-              disabled={loading || !file}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? 'Importing...' : 'Start Import'}
-            </button>
-          </div>
+              {preview.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="font-medium mb-2">{t('import.preview')}</h3>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          {Object.keys(preview[0]).map((key) => (
+                            <th key={key} className="px-3 py-2 text-left font-medium text-gray-700">
+                              {key}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {preview.map((row, i) => (
+                          <tr key={i} className="border-b">
+                            {Object.values(row).map((val, j) => (
+                              <td key={j} className="px-3 py-2 text-gray-600">
+                                {String(val)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
+
+              {result && (
+                <div className={`p-4 rounded-lg mb-4 ${result.errors.length === 0 ? 'bg-emerald-50 border border-emerald-200' : 'bg-yellow-50 border border-yellow-200'}`}>
+                  <div className="flex items-center gap-2">
+                    {result.errors.length === 0 ? (
+                      <CheckCircle className="size-5 text-emerald-600" />
+                    ) : (
+                      <AlertTriangle className="size-5 text-yellow-600" />
+                    )}
+                    <p className="font-medium">
+                      {result.success} {t('import.success')}
+                    </p>
+                  </div>
+                  {result.errors.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-sm text-red-600">{result.errors.length} {t('import.errors')}:</p>
+                      <ul className="text-sm text-red-600 mt-1 list-disc list-inside">
+                        {result.errors.slice(0, 5).map((err, i) => (
+                          <li key={i}>{err}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <Button
+                onClick={handleImport}
+                disabled={loading || !file}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white"
+              >
+                <Upload className="size-4 mr-2" />
+                {loading ? t('import.importing') : t('import.start')}
+              </Button>
+            </CardContent>
+          </Card>
         )}
-      </main>
-    </div>
+      </div>
+    </PageTransition>
   )
 }

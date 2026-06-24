@@ -2,7 +2,20 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import Link from 'next/link'
+import { PageTransition } from '@/components/PageTransition'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import { Plus, Trash2, ExternalLink, FileText } from 'lucide-react'
+import { useI18n } from '@/lib/i18n'
 import DocumentUpload from '@/components/DocumentUpload'
 
 const DOCUMENT_TYPES = [
@@ -17,21 +30,34 @@ const DOCUMENT_TYPES = [
 ]
 
 export default function DocumentsPage() {
+  const { t } = useI18n()
   const [documents, setDocuments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showUpload, setShowUpload] = useState(false)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [tenantId, setTenantId] = useState<string | null>(null)
   const supabase = createClient()
 
-  useEffect(() => { fetchDocuments() }, [filter])
+  useEffect(() => {
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setLoading(false); return }
+      const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).single()
+      if (!userData?.tenant_id) { setLoading(false); return }
+      setTenantId(userData.tenant_id)
+      await fetchDocuments(userData.tenant_id)
+    }
+    init()
+  }, [filter])
 
-  async function fetchDocuments() {
+  async function fetchDocuments(tid?: string) {
     setLoading(true)
 
     let query = supabase
       .from('documents')
       .select('*, customer:customers(full_name), vehicle:vehicles(make, model, license_plate)')
+      .eq('tenant_id', tid as string)
 
     if (filter !== 'all') {
       query = query.eq('type', filter)
@@ -56,14 +82,8 @@ export default function DocumentsPage() {
       if (fileName) {
         await supabase.storage.from('documents').remove([fileName])
       }
-      await fetchDocuments()
+      if (tenantId) await fetchDocuments(tenantId)
     }
-  }
-
-  function getFileIcon(mimeType: string) {
-    if (mimeType?.startsWith('image/')) return '🖼️'
-    if (mimeType === 'application/pdf') return '📄'
-    return '📎'
   }
 
   function formatFileSize(bytes: number) {
@@ -79,77 +99,68 @@ export default function DocumentsPage() {
   )
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center space-x-8">
-              <Link href="/dashboard" className="text-xl font-bold text-gray-900">MotoRent</Link>
-              <h1 className="text-lg font-medium">Documents</h1>
+    <PageTransition>
+      {showUpload && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-4 border-b">
+              <h3 className="font-medium">{t('documents.upload')}</h3>
             </div>
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setShowUpload(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Upload Document
-              </button>
+            <div className="p-4">
+              <DocumentUpload
+                onUploaded={() => { setShowUpload(false); fetchDocuments() }}
+                onCancel={() => setShowUpload(false)}
+              />
             </div>
           </div>
         </div>
-      </nav>
+      )}
 
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        {/* Upload Modal */}
-        {showUpload && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-              <div className="p-4 border-b">
-                <h3 className="font-medium">Upload Document</h3>
-              </div>
-              <div className="p-4">
-                <DocumentUpload
-                  onUploaded={() => { setShowUpload(false); fetchDocuments() }}
-                  onCancel={() => setShowUpload(false)}
-                />
-              </div>
-            </div>
-          </div>
-        )}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{t('documents.title')}</h1>
+          <p className="text-gray-600">{t('documents.search')}</p>
+        </div>
+        <Button onClick={() => setShowUpload(true)} className="bg-emerald-500 hover:bg-emerald-600 text-white">
+          <Plus className="size-4 mr-2" />
+          {t('documents.upload')}
+        </Button>
+      </div>
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="flex-1">
-            <input
-              type="text"
-              placeholder="Search documents..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg"
-          >
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <div className="flex-1">
+          <Input
+            type="text"
+            placeholder={t('documents.search')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <Select value={filter} onValueChange={(v) => v && setFilter(v)}>
+          <SelectTrigger className="w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
             {DOCUMENT_TYPES.map((type) => (
-              <option key={type.value} value={type.value}>{type.label}</option>
+              <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
             ))}
-          </select>
-        </div>
+          </SelectContent>
+        </Select>
+      </div>
 
-        {/* Documents Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {loading ? (
-            <div className="col-span-full text-center py-8">Loading...</div>
-          ) : filteredDocuments.length === 0 ? (
-            <div className="col-span-full text-center py-8 text-gray-500">No documents found</div>
-          ) : (
-            filteredDocuments.map((doc) => (
-              <div key={doc.id} className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {loading ? (
+          <div className="col-span-full text-center py-8 text-gray-500">{t('common.loading')}</div>
+        ) : filteredDocuments.length === 0 ? (
+          <div className="col-span-full text-center py-8 text-gray-500">{t('documents.empty')}</div>
+        ) : (
+          filteredDocuments.map((doc) => (
+            <Card key={doc.id}>
+              <CardContent className="p-4">
                 <div className="flex items-start gap-3">
-                  <span className="text-2xl">{getFileIcon(doc.mime_type)}</span>
+                  <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700">
+                    <FileText className="size-5" />
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate">{doc.name}</p>
                     <p className="text-sm text-gray-500 capitalize">
@@ -157,12 +168,12 @@ export default function DocumentsPage() {
                     </p>
                     {doc.customer && (
                       <p className="text-sm text-gray-500">
-                        Customer: {doc.customer.full_name}
+                        {t('documents.customer_label')} {doc.customer.full_name}
                       </p>
                     )}
                     {doc.vehicle && (
                       <p className="text-sm text-gray-500">
-                        Vehicle: {doc.vehicle.make} {doc.vehicle.model}
+                        {t('documents.vehicle_label')} {doc.vehicle.make} {doc.vehicle.model}
                       </p>
                     )}
                   </div>
@@ -173,27 +184,25 @@ export default function DocumentsPage() {
                     <p>{new Date(doc.created_at).toLocaleDateString('fr-FR')}</p>
                   </div>
                   <div className="flex gap-2">
-                    <a
-                      href={doc.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50"
-                    >
-                      View
-                    </a>
-                    <button
+                    <Button variant="outline" size="sm" render={<a href={doc.file_url} target="_blank" rel="noopener noreferrer" />}>
+                        <ExternalLink className="size-3 mr-1" />
+                        {t('documents.view')}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-500"
                       onClick={() => deleteDocument(doc.id, doc.file_url)}
-                      className="px-3 py-1 text-sm text-red-600 border border-red-300 rounded hover:bg-red-50"
                     >
-                      Delete
-                    </button>
+                      <Trash2 className="size-3" />
+                    </Button>
                   </div>
                 </div>
-              </div>
-            ))
-          )}
-        </div>
-      </main>
-    </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+    </PageTransition>
   )
 }

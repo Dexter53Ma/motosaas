@@ -47,10 +47,18 @@ export default function RentalForm({ rentalId, preselectedCustomerId, preselecte
 
   useEffect(() => {
     const getData = async () => {
+      // Get user and tenant
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).single()
+      if (!userData?.tenant_id) return
+      const tid = userData.tenant_id
+
       // Get available vehicles
       const { data: vehicleData } = await supabase
         .from('vehicles')
         .select('*')
+        .eq('tenant_id', tid)
         .eq('status', 'available')
         .order('make')
 
@@ -62,6 +70,7 @@ export default function RentalForm({ rentalId, preselectedCustomerId, preselecte
       const { data: customerData } = await supabase
         .from('customers')
         .select('id, full_name, phone')
+        .eq('tenant_id', tid)
         .order('full_name')
 
       if (customerData) {

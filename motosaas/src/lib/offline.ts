@@ -12,7 +12,7 @@ interface PendingOperation {
   id: string
   table: string
   operation: 'insert' | 'update' | 'delete'
-  data: any
+  data: unknown
   timestamp: number
   synced: boolean
 }
@@ -133,12 +133,15 @@ class OfflineStorage {
 export const offlineStorage = new OfflineStorage()
 
 export function useOfflineStatus() {
-  const [isOnline, setIsOnline] = useState(true)
+  const [isOnline, setIsOnline] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return navigator.onLine
+    }
+    return true
+  })
   const [pendingCount, setPendingCount] = useState(0)
 
   useEffect(() => {
-    setIsOnline(navigator.onLine)
-
     const handleOnline = () => setIsOnline(true)
     const handleOffline = () => setIsOnline(false)
 
@@ -188,6 +191,8 @@ export function useOfflineData<T>(
 
   const { ttl = 5 * 60 * 1000 } = options
 
+  const stableFetcher = useCallback(fetcher, [fetcher])
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -204,7 +209,7 @@ export function useOfflineData<T>(
           }
         }
 
-        const freshData = await fetcher()
+        const freshData = await stableFetcher()
         setData(freshData)
         setIsFromCache(false)
 
@@ -227,7 +232,7 @@ export function useOfflineData<T>(
     }
 
     loadData()
-  }, [key, ttl])
+  }, [key, ttl, stableFetcher])
 
   return { data, loading, error, isFromCache }
 }

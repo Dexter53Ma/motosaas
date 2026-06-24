@@ -2,10 +2,31 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import Link from 'next/link'
+import { PageTransition } from '@/components/PageTransition'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table'
+import { Download, Filter } from 'lucide-react'
+import { useI18n } from '@/lib/i18n'
 
 const ACTION_COLORS: Record<string, string> = {
-  create: 'bg-green-100 text-green-800',
+  create: 'bg-emerald-100 text-emerald-800',
   update: 'bg-blue-100 text-blue-800',
   delete: 'bg-red-100 text-red-800',
   login: 'bg-purple-100 text-purple-800',
@@ -16,6 +37,7 @@ const ACTION_COLORS: Record<string, string> = {
 }
 
 export default function AuditTrailPage() {
+  const { t } = useI18n()
   const [logs, setLogs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({
@@ -34,14 +56,28 @@ export default function AuditTrailPage() {
   })
   const supabase = createClient()
 
-  useEffect(() => { fetchLogs() }, [filters])
+  const [tenantId, setTenantId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).single()
+      if (userData?.tenant_id) setTenantId(userData.tenant_id)
+    }
+    init()
+  }, [])
+
+  useEffect(() => { if (tenantId) fetchLogs() }, [filters, tenantId])
 
   async function fetchLogs() {
+    if (!tenantId) return
     setLoading(true)
 
     let query = supabase
       .from('audit_logs')
       .select('*, user:users(full_name, email)', { count: 'exact' })
+      .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false })
       .limit(100)
 
@@ -74,9 +110,11 @@ export default function AuditTrailPage() {
   }
 
   async function exportLogs() {
+    if (!tenantId) return
     const { data } = await supabase
       .from('audit_logs')
       .select('*, user:users(full_name, email)')
+      .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false })
       .limit(1000)
 
@@ -106,162 +144,161 @@ export default function AuditTrailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center space-x-8">
-              <Link href="/dashboard" className="text-xl font-bold text-gray-900">MotoRent</Link>
-              <h1 className="text-lg font-medium">Audit Trail</h1>
-            </div>
-            <div className="flex items-center gap-4">
-              <button
-                onClick={exportLogs}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Export CSV
-              </button>
-            </div>
-          </div>
+    <PageTransition>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{t('audit.title')}</h1>
         </div>
-      </nav>
+        <Button variant="outline" onClick={exportLogs}>
+          <Download className="size-4 mr-2" />
+          {t('audit.export')}
+        </Button>
+      </div>
 
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow p-4">
-            <p className="text-sm text-gray-500">Total Events</p>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-gray-500">{t('audit.total_events')}</p>
             <p className="text-2xl font-bold">{stats.total}</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-4">
-            <p className="text-sm text-gray-500">Today</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-gray-500">{t('audit.today')}</p>
             <p className="text-2xl font-bold">{stats.today}</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-4">
-            <p className="text-sm text-gray-500">This Week</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-gray-500">{t('audit.this_week')}</p>
             <p className="text-2xl font-bold">{stats.thisWeek}</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-4">
-            <p className="text-sm text-gray-500">Actions</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-gray-500">{t('audit.action')}</p>
             <div className="flex flex-wrap gap-2 mt-2">
               {Object.entries(stats.byAction).slice(0, 3).map(([action, count]) => (
-                <span key={action} className={`px-2 py-0.5 text-xs rounded ${ACTION_COLORS[action]}`}>
+                <Badge key={action} className={ACTION_COLORS[action]}>
                   {action}: {count}
-                </span>
+                </Badge>
               ))}
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
+      </div>
 
-        {/* Filters */}
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
+      <Card className="mb-6">
+        <CardContent className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
-              <input
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('audit.search')}</label>
+              <Input
                 type="text"
                 value={filters.search}
                 onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                placeholder="Search logs..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                placeholder={t('audit.search_logs')}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Action</label>
-              <select
-                value={filters.action}
-                onChange={(e) => setFilters({ ...filters, action: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              >
-                <option value="">All</option>
-                <option value="create">Create</option>
-                <option value="update">Update</option>
-                <option value="delete">Delete</option>
-                <option value="login">Login</option>
-              </select>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('audit.action')}</label>
+              <Select value={filters.action} onValueChange={(v) => setFilters({ ...filters, action: v === 'all' ? '' : (v ?? '') })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="create">Create</SelectItem>
+                  <SelectItem value="update">Update</SelectItem>
+                  <SelectItem value="delete">Delete</SelectItem>
+                  <SelectItem value="login">Login</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Table</label>
-              <select
-                value={filters.table}
-                onChange={(e) => setFilters({ ...filters, table: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              >
-                <option value="">All</option>
-                <option value="vehicles">Vehicles</option>
-                <option value="customers">Customers</option>
-                <option value="rentals">Rentals</option>
-                <option value="payments">Payments</option>
-              </select>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('audit.table')}</label>
+              <Select value={filters.table} onValueChange={(v) => setFilters({ ...filters, table: v === 'all' ? '' : (v ?? '') })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="vehicles">Vehicles</SelectItem>
+                  <SelectItem value="customers">Customers</SelectItem>
+                  <SelectItem value="rentals">Rentals</SelectItem>
+                  <SelectItem value="payments">Payments</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-              <input
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('audit.start_date')}</label>
+              <Input
                 type="date"
                 value={filters.start}
                 onChange={(e) => setFilters({ ...filters, start: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-              <input
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('audit.end_date')}</label>
+              <Input
                 type="date"
                 value={filters.end}
                 onChange={(e) => setFilters({ ...filters, end: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
               />
             </div>
             <div className="flex items-end">
-              <button
+              <Button
+                variant="outline"
+                className="w-full"
                 onClick={() => setFilters({ action: '', table: '', user: '', start: '', end: '', search: '' })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
               >
-                Clear
-              </button>
+                {t('audit.clear')}
+              </Button>
             </div>
           </div>
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* Logs */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+      <Card>
+        <CardContent className="p-0">
           {loading ? (
-            <div className="p-8 text-center text-gray-500">Loading...</div>
+            <div className="p-8 text-center text-gray-500">{t('common.loading')}</div>
           ) : logs.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">No audit logs found</div>
+            <div className="p-8 text-center text-gray-500">{t('audit.empty')}</div>
           ) : (
-            <div className="divide-y max-h-[600px] overflow-y-auto">
-              {logs.map((log) => (
-                <div key={log.id} className="p-4 hover:bg-gray-50">
-                  <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0">
-                      <span className={`px-2 py-1 text-xs rounded-full ${ACTION_COLORS[log.action]}`}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Table</TableHead>
+                  <TableHead>User</TableHead>
+                  <TableHead>Details</TableHead>
+                  <TableHead className="text-right">Timestamp</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {logs.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell>
+                      <Badge className={ACTION_COLORS[log.action]}>
                         {log.action}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-gray-900">{log.table_name}</p>
-                        {log.record_id && (
-                          <span className="text-xs text-gray-500 font-mono">
-                            {log.record_id.substring(0, 8)}...
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {log.user?.full_name || 'System'} • {formatJson(log.new_data)}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        {new Date(log.created_at).toLocaleString('fr-FR')}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-medium">{log.table_name}</TableCell>
+                    <TableCell>{log.user?.full_name || 'System'}</TableCell>
+                    <TableCell className="text-sm text-gray-500 max-w-[200px] truncate">
+                      {formatJson(log.new_data)}
+                    </TableCell>
+                    <TableCell className="text-right text-sm text-gray-500">
+                      {new Date(log.created_at).toLocaleString('fr-FR')}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
-        </div>
-      </main>
-    </div>
+        </CardContent>
+      </Card>
+    </PageTransition>
   )
 }

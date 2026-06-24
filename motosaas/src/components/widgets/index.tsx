@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState } from 'react'
+import { RefreshCw } from 'lucide-react'
 
 interface WidgetProps {
   title: string
@@ -21,22 +21,20 @@ export function Widget({ title, children, onRefresh, className = '' }: WidgetPro
   }
 
   return (
-    <div className={`bg-white rounded-lg shadow ${className}`}>
-      <div className="px-4 py-3 border-b flex items-center justify-between">
-        <h3 className="font-medium text-gray-900">{title}</h3>
+    <div className={`bg-white rounded-xl shadow-sm border border-gray-100 ${className}`}>
+      <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
+        <h3 className="text-sm font-medium text-gray-900">{title}</h3>
         {onRefresh && (
           <button
             onClick={handleRefresh}
             disabled={loading}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 hover:text-emerald-600 transition-colors"
           >
-            <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           </button>
         )}
       </div>
-      <div className="p-4">
+      <div className="p-5">
         {children}
       </div>
     </div>
@@ -53,17 +51,23 @@ interface StatWidgetProps {
 
 export function StatWidget({ title, value, change, changeLabel, icon }: StatWidgetProps) {
   return (
-    <Widget title={title}>
-      <div className="flex items-center justify-between">
+    <Widget title={title} className="hover:shadow-md transition-shadow duration-200">
+      <div className="flex items-start justify-between">
         <div>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
+          <p className="text-2xl font-bold text-gray-900 tabular-nums tracking-tight mb-1.5">
+            {value}
+          </p>
           {change !== undefined && (
-            <p className={`text-sm ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {change >= 0 ? '↑' : '↓'} {Math.abs(change)}% {changeLabel || 'vs last period'}
+            <p className={`text-xs font-medium flex items-center gap-1 ${change >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+              {change >= 0 ? '↑' : '↓'} {Math.abs(change)}% <span className="text-gray-400 font-normal">{changeLabel || 'vs last period'}</span>
             </p>
           )}
         </div>
-        {icon && <span className="text-3xl">{icon}</span>}
+        {icon && (
+          <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center">
+            <span className="text-xl">{icon}</span>
+          </div>
+        )}
       </div>
     </Widget>
   )
@@ -79,22 +83,24 @@ interface ListWidgetProps<T> {
 
 export function ListWidget<T>({ title, items, renderItem, emptyMessage = 'No items', viewAllUrl }: ListWidgetProps<T>) {
   return (
-    <Widget title={title}>
+    <Widget title={title} className="hover:shadow-md transition-shadow duration-200">
       {items.length === 0 ? (
-        <p className="text-gray-500 text-sm">{emptyMessage}</p>
+        <p className="text-gray-400 text-sm py-4">{emptyMessage}</p>
       ) : (
-        <div className="divide-y">
+        <div className="divide-y divide-gray-50 -mx-5 -mt-2 -mb-5">
           {items.slice(0, 5).map((item, i) => (
-            <div key={i} className="py-2 first:pt-0 last:pb-0">
+            <div key={i} className="px-5 py-3 hover:bg-gray-50/50 transition-colors">
               {renderItem(item)}
             </div>
           ))}
         </div>
       )}
       {viewAllUrl && items.length > 0 && (
-        <a href={viewAllUrl} className="block mt-3 text-sm text-blue-600 hover:text-blue-800">
-          View all →
-        </a>
+        <div className="mt-3 pt-3 border-t border-gray-50">
+          <a href={viewAllUrl} className="text-xs font-medium text-emerald-600 hover:text-emerald-700 flex items-center gap-1">
+            View all <span>→</span>
+          </a>
+        </div>
       )}
     </Widget>
   )
@@ -110,18 +116,18 @@ export function ChartWidget({ title, data, maxValue }: ChartWidgetProps) {
   const max = maxValue || Math.max(...data.map(d => d.value), 1)
 
   return (
-    <Widget title={title}>
-      <div className="space-y-2">
+    <Widget title={title} className="hover:shadow-md transition-shadow duration-200">
+      <div className="space-y-2.5">
         {data.slice(0, 6).map((item, i) => (
           <div key={i} className="flex items-center gap-3">
-            <span className="text-sm text-gray-600 w-20 truncate">{item.label}</span>
-            <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+            <span className="text-xs text-gray-500 w-20 truncate font-medium">{item.label}</span>
+            <div className="flex-1 bg-gray-50 rounded-full h-2 overflow-hidden">
               <div
-                className="h-full bg-blue-500 rounded-full transition-all"
+                className="h-full bg-emerald-500 rounded-full transition-all duration-500 ease-out"
                 style={{ width: `${(item.value / max) * 100}%` }}
               />
             </div>
-            <span className="text-sm font-medium text-gray-900 w-16 text-right">
+            <span className="text-xs font-semibold text-gray-800 w-14 text-right tabular-nums">
               {item.value.toLocaleString()}
             </span>
           </div>

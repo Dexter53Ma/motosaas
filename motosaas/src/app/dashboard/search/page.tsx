@@ -2,8 +2,15 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { PageTransition } from '@/components/PageTransition'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Search, Users, Car, FileText, DollarSign } from 'lucide-react'
+import { useI18n } from '@/lib/i18n'
+import Link from 'next/link'
 
 interface SearchResult {
   id: string
@@ -13,7 +20,15 @@ interface SearchResult {
   url: string
 }
 
+const TYPE_CONFIG: Record<string, { icon: any; color: string }> = {
+  customer: { icon: Users, color: 'bg-emerald-100 text-emerald-700' },
+  vehicle: { icon: Car, color: 'bg-blue-100 text-blue-700' },
+  rental: { icon: FileText, color: 'bg-purple-100 text-purple-700' },
+  payment: { icon: DollarSign, color: 'bg-orange-100 text-orange-700' },
+}
+
 export default function SearchPage() {
+  const { t } = useI18n()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
@@ -43,11 +58,16 @@ export default function SearchPage() {
     const searchTerm = `%${q}%`
     const allResults: SearchResult[] = []
 
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setLoading(false); return }
+    const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).single()
+    if (!userData?.tenant_id) { setLoading(false); return }
+
     const [customers, vehicles, rentals, payments] = await Promise.all([
-      supabase.from('customers').select('id, full_name, phone, email').ilike('full_name', searchTerm).limit(5),
-      supabase.from('vehicles').select('id, make, model, license_plate').or(`make.ilike.${searchTerm},model.ilike.${searchTerm},license_plate.ilike.${searchTerm}`).limit(5),
-      supabase.from('rentals').select('id, status, start_date, customer:customers(full_name), vehicle:vehicles(make, model, license_plate)').limit(5),
-      supabase.from('payments').select('id, amount, payment_method, customer:customers(full_name)').ilike('reference', searchTerm).limit(5),
+      supabase.from('customers').select('id, full_name, phone, email').eq('tenant_id', userData.tenant_id).ilike('full_name', searchTerm).limit(5),
+      supabase.from('vehicles').select('id, make, model, license_plate').eq('tenant_id', userData.tenant_id).or(`make.ilike.${searchTerm},model.ilike.${searchTerm},license_plate.ilike.${searchTerm}`).limit(5),
+      supabase.from('rentals').select('id, status, start_date, customer:customers(full_name), vehicle:vehicles(make, model, license_plate)').eq('tenant_id', userData.tenant_id).limit(5),
+      supabase.from('payments').select('id, amount, payment_method, customer:customers(full_name)').eq('tenant_id', userData.tenant_id).ilike('reference_number', searchTerm).limit(5),
     ])
 
     if (customers.data) {
@@ -103,112 +123,95 @@ export default function SearchPage() {
     return () => clearTimeout(debounce)
   }, [query])
 
-  const typeIcons: Record<string, string> = {
-    customer: '👤',
-    vehicle: '🚗',
-    rental: '📋',
-    payment: '💰',
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center space-x-8">
-              <Link href="/dashboard" className="text-xl font-bold text-gray-900">MotoRent</Link>
-              <h1 className="text-lg font-medium">Search</h1>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <main className="max-w-3xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        {/* Search Input */}
+    <PageTransition>
+      <div className="max-w-3xl mx-auto">
         <div className="relative mb-6">
-          <input
+          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <Input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search customers, vehicles, rentals, payments..."
-            className="w-full px-4 py-3 pl-12 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder={t('search.placeholder')}
+            className="pl-12 py-3 text-lg"
             autoFocus
           />
-          <svg
-            className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
           {loading && (
             <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-              <div className="animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full" />
+              <div className="animate-spin w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full" />
             </div>
           )}
         </div>
 
-        {/* Recent Searches */}
         {!query && recentSearches.length > 0 && (
-          <div className="bg-white rounded-lg shadow p-4 mb-6">
-            <h3 className="text-sm font-medium text-gray-500 mb-3">Recent Searches</h3>
-            <div className="flex flex-wrap gap-2">
-              {recentSearches.map((search, i) => (
-                <button
-                  key={i}
-                  onClick={() => setQuery(search)}
-                  className="px-3 py-1 text-sm bg-gray-100 rounded-full hover:bg-gray-200"
-                >
-                  {search}
-                </button>
-              ))}
-            </div>
-          </div>
+          <Card className="mb-6">
+            <CardContent className="p-4">
+              <p className="text-sm font-medium text-gray-500 mb-3">{t('search.recent')}</p>
+              <div className="flex flex-wrap gap-2">
+                {recentSearches.map((search, i) => (
+                  <Button
+                    key={i}
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setQuery(search)}
+                    className="rounded-full"
+                  >
+                    {search}
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         )}
 
-        {/* Results */}
         {results.length > 0 && (
-          <div className="bg-white rounded-lg shadow divide-y">
-            {results.map((result) => (
-              <Link
-                key={result.id}
-                href={result.url}
-                className="block p-4 hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{typeIcons[result.type]}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 truncate">{result.title}</p>
-                    <p className="text-sm text-gray-500 truncate">{result.subtitle}</p>
-                  </div>
-                  <span className="text-xs text-gray-400 capitalize">{result.type}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
+          <Card>
+            <CardContent className="p-0 divide-y">
+              {results.map((result) => {
+                const config = TYPE_CONFIG[result.type]
+                const Icon = config.icon
+                return (
+                  <Link
+                    key={result.id}
+                    href={result.url}
+                    className="block p-4 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-lg ${config.color}`}>
+                        <Icon className="size-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 truncate">{result.title}</p>
+                        <p className="text-sm text-gray-500 truncate">{result.subtitle}</p>
+                      </div>
+                      <Badge variant="outline" className="capitalize">{result.type}</Badge>
+                    </div>
+                  </Link>
+                )
+              })}
+            </CardContent>
+          </Card>
         )}
 
-        {/* No Results */}
         {query && !loading && results.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-gray-500">No results found for &quot;{query}&quot;</p>
+            <p className="text-gray-500">{t('search.no_results')} &quot;{query}&quot;</p>
           </div>
         )}
 
-        {/* Empty State */}
         {!query && recentSearches.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-gray-500 mb-4">Start typing to search across all your data</p>
+            <Search className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+            <p className="text-gray-500 mb-4">{t('search.start_typing')}</p>
             <div className="flex justify-center gap-4 text-sm text-gray-400">
-              <span>👤 Customers</span>
-              <span>🚗 Vehicles</span>
-              <span>📋 Rentals</span>
-              <span>💰 Payments</span>
+              <span className="flex items-center gap-1"><Users className="size-4" /> Customers</span>
+              <span className="flex items-center gap-1"><Car className="size-4" /> Vehicles</span>
+              <span className="flex items-center gap-1"><FileText className="size-4" /> Rentals</span>
+              <span className="flex items-center gap-1"><DollarSign className="size-4" /> Payments</span>
             </div>
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </PageTransition>
   )
 }

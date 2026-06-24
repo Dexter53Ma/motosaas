@@ -4,12 +4,20 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { PageTransition } from '@/components/PageTransition'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
+import { useI18n } from '@/lib/i18n'
+import { Search, Plus, CreditCard, TrendingUp, Calendar, Hash } from 'lucide-react'
 
 interface Payment {
   id: string
   amount: number
   payment_method: string
-  payment_date: string
+  created_at: string
   reference_number?: string
   notes?: string
   rental?: {
@@ -18,21 +26,21 @@ interface Payment {
   }
   customer?: {
     id: string
-    first_name: string
-    last_name: string
+    full_name: string
     phone: string
   }
 }
 
-const METHOD_COLORS: Record<string, string> = {
-  cash: 'bg-green-100 text-green-800',
-  card: 'bg-blue-100 text-blue-800',
-  bank_transfer: 'bg-purple-100 text-purple-800',
-  mobile_money: 'bg-orange-100 text-orange-800',
-  other: 'bg-gray-100 text-gray-800',
+const METHOD_BADGE: Record<string, string> = {
+  cash: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  card: 'bg-blue-100 text-blue-700 border-blue-200',
+  bank_transfer: 'bg-purple-100 text-purple-700 border-purple-200',
+  mobile_money: 'bg-orange-100 text-orange-700 border-orange-200',
+  other: 'bg-gray-100 text-gray-700 border-gray-200',
 }
 
 export default function PaymentsPage() {
+  const { t } = useI18n()
   const [payments, setPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -54,9 +62,9 @@ export default function PaymentsPage() {
 
     const { data: paymentsData } = await supabase
       .from('payments')
-      .select('*, rental:rentals(id, vehicle:vehicles(make, model, year)), customer:customers(id, first_name, last_name, phone)')
+      .select('*, rental:rentals(id, vehicle:vehicles(make, model, year)), customer:customers(id, full_name, phone)')
       .eq('tenant_id', userData.tenant_id)
-      .order('payment_date', { ascending: false })
+      .order('created_at', { ascending: false })
 
     if (paymentsData) {
       setPayments(paymentsData)
@@ -64,8 +72,8 @@ export default function PaymentsPage() {
       const thisMonth = new Date().toISOString().slice(0, 7)
       setStats({
         totalRevenue: paymentsData.reduce((s, p) => s + (p.amount || 0), 0),
-        todayRevenue: paymentsData.filter(p => p.payment_date?.startsWith(today)).reduce((s, p) => s + (p.amount || 0), 0),
-        monthRevenue: paymentsData.filter(p => p.payment_date?.startsWith(thisMonth)).reduce((s, p) => s + (p.amount || 0), 0),
+        todayRevenue: paymentsData.filter(p => p.created_at?.startsWith(today)).reduce((s, p) => s + (p.amount || 0), 0),
+        monthRevenue: paymentsData.filter(p => p.created_at?.startsWith(thisMonth)).reduce((s, p) => s + (p.amount || 0), 0),
       })
     }
     setLoading(false)
@@ -73,110 +81,153 @@ export default function PaymentsPage() {
 
   const filtered = payments.filter(p => {
     const matchSearch = !searchQuery ||
-      p.customer?.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.customer?.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.customer?.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.reference_number?.toLowerCase().includes(searchQuery.toLowerCase())
     const matchMethod = methodFilter === 'all' || p.payment_method === methodFilter
     return matchSearch && matchMethod
   })
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center space-x-8">
-              <Link href="/dashboard" className="text-xl font-bold text-gray-900">MotoRent</Link>
-              <div className="hidden md:flex space-x-4">
-                <Link href="/dashboard" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium">Dashboard</Link>
-                <Link href="/dashboard/vehicles" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium">Vehicles</Link>
-                <Link href="/dashboard/customers" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium">Customers</Link>
-                <Link href="/dashboard/rentals" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium">Rentals</Link>
-                <Link href="/dashboard/payments" className="text-gray-900 font-semibold px-3 py-2 text-sm">Payments</Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </nav>
-
+    <PageTransition>
       <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Payments</h1>
-            <p className="text-gray-600">Track all payments and revenue</p>
+            <h1 className="text-2xl font-bold text-gray-900">{t('payments.title')}</h1>
+            <p className="text-gray-600">{t('payments.track')}</p>
           </div>
-          <Link href="/dashboard/payments/new"
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-            + Record Payment
+          <Link href="/dashboard/payments/new">
+            <Button className="bg-emerald-600 hover:bg-emerald-700">
+              <Plus className="mr-2 h-4 w-4" />
+              {t('payments.record')}
+            </Button>
           </Link>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow p-4">
-            <p className="text-sm text-gray-500">Total Revenue</p>
-            <p className="text-2xl font-bold">{stats.totalRevenue.toLocaleString()} MAD</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-4">
-            <p className="text-sm text-gray-500">Today</p>
-            <p className="text-2xl font-bold text-green-600">{stats.todayRevenue.toLocaleString()} MAD</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-4">
-            <p className="text-sm text-gray-500">This Month</p>
-            <p className="text-2xl font-bold text-blue-600">{stats.monthRevenue.toLocaleString()} MAD</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-4">
-            <p className="text-sm text-gray-500">Transactions</p>
-            <p className="text-2xl font-bold">{payments.length}</p>
-          </div>
+          <Card className="border-l-4 border-l-emerald-500">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-lg">
+                  <TrendingUp className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">{t('payments.total_revenue')}</p>
+                  <p className="text-2xl font-bold">{stats.totalRevenue.toLocaleString()} MAD</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-emerald-500">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-lg">
+                  <Calendar className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">{t('payments.today')}</p>
+                  <p className="text-2xl font-bold text-emerald-600">{stats.todayRevenue.toLocaleString()} MAD</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-emerald-500">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-lg">
+                  <Calendar className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">{t('payments.this_month')}</p>
+                  <p className="text-2xl font-bold text-emerald-600">{stats.monthRevenue.toLocaleString()} MAD</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-emerald-500">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-lg">
+                  <Hash className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">{t('payments.transactions')}</p>
+                  <p className="text-2xl font-bold">{payments.length}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="flex gap-4 mb-4">
-          <input
-            type="text" placeholder="Search by customer or reference..."
-            value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          />
-          <select value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-            <option value="all">All Methods</option>
-            <option value="cash">Cash</option>
-            <option value="card">Card</option>
-            <option value="bank_transfer">Bank Transfer</option>
-            <option value="mobile_money">Mobile Money</option>
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder={t('payments.search')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <select
+            value={methodFilter}
+            onChange={(e) => setMethodFilter(e.target.value)}
+            className="flex h-10 w-auto items-center rounded-md border border-gray-200 bg-white px-3 py-2 text-sm ring-offset-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+          >
+            <option value="all">{t('payments.all_methods')}</option>
+            <option value="cash">{t('payments.cash')}</option>
+            <option value="card">{t('payments.card')}</option>
+            <option value="bank_transfer">{t('payments.bank_transfer')}</option>
+            <option value="mobile_money">{t('payments.mobile_money')}</option>
           </select>
         </div>
 
-        <div className="bg-white rounded-lg shadow">
-          {loading ? (
-            <div className="p-8 text-center text-gray-500">Loading payments...</div>
-          ) : filtered.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">No payments found</div>
-          ) : (
-            <div className="divide-y">
-              {filtered.map((payment) => (
-                <div key={payment.id} className="p-4 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
-                  onClick={() => router.push(`/dashboard/payments/${payment.id}`)}>
-                  <div className="flex items-center gap-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${METHOD_COLORS[payment.payment_method] || 'bg-gray-100 text-gray-800'}`}>
-                      {payment.payment_method.replace('_', ' ')}
-                    </span>
-                    <div>
-                      <p className="font-medium">{payment.customer?.first_name} {payment.customer?.last_name}</p>
-                      <p className="text-sm text-gray-500">
-                        {payment.rental?.vehicle?.make} {payment.rental?.vehicle?.model}
-                      </p>
+        <Card>
+          <CardContent className="p-0">
+            {loading ? (
+              <div className="p-8 text-center text-gray-500">{t('payments.loading')}</div>
+            ) : filtered.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">{t('payments.no_payments')}</div>
+            ) : (
+              <div className="divide-y">
+                {filtered.map((payment) => (
+                  <div
+                    key={payment.id}
+                    className="p-4 hover:bg-gray-50 cursor-pointer flex items-center justify-between transition-colors"
+                    onClick={() => router.push(`/dashboard/payments/${payment.id}`)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-emerald-50 rounded-lg">
+                        <CreditCard className="h-4 w-4 text-emerald-600" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge
+                            variant="outline"
+                            className={cn('text-xs capitalize', METHOD_BADGE[payment.payment_method] || 'bg-gray-100 text-gray-700 border-gray-200')}
+                          >
+                            {payment.payment_method.replace('_', ' ')}
+                          </Badge>
+                        </div>
+                        <p className="font-medium">{payment.customer?.full_name}</p>
+                        <p className="text-sm text-gray-500">
+                          {payment.rental?.vehicle?.make} {payment.rental?.vehicle?.model}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-emerald-600">+{payment.amount?.toLocaleString()} MAD</p>
+                      <p className="text-sm text-gray-500">{new Date(payment.created_at).toLocaleDateString('fr-FR')}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold text-green-600">+{payment.amount?.toLocaleString()} MAD</p>
-                    <p className="text-sm text-gray-500">{new Date(payment.payment_date).toLocaleDateString('fr-FR')}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </main>
-    </div>
+    </PageTransition>
   )
 }

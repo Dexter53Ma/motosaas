@@ -1,7 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
 
-const supabase = createClient()
-
 export interface RevenueReport {
   report_date: string
   transaction_count: number
@@ -50,6 +48,7 @@ export interface DashboardStats {
 }
 
 export async function getRevenueReport(tenantId: string, startDate?: string, endDate?: string): Promise<RevenueReport[]> {
+  const supabase = createClient()
   const { data, error } = await supabase
     .rpc('get_revenue_report', {
       p_tenant_id: tenantId,
@@ -62,6 +61,7 @@ export async function getRevenueReport(tenantId: string, startDate?: string, end
 }
 
 export async function getVehicleUtilizationReport(tenantId: string): Promise<VehicleUtilization[]> {
+  const supabase = createClient()
   const { data, error } = await supabase
     .rpc('get_vehicle_utilization_report', { p_tenant_id: tenantId })
 
@@ -70,6 +70,7 @@ export async function getVehicleUtilizationReport(tenantId: string): Promise<Veh
 }
 
 export async function getCustomerAnalyticsReport(tenantId: string): Promise<CustomerAnalytics[]> {
+  const supabase = createClient()
   const { data, error } = await supabase
     .rpc('get_customer_analytics_report', { p_tenant_id: tenantId })
 
@@ -78,6 +79,7 @@ export async function getCustomerAnalyticsReport(tenantId: string): Promise<Cust
 }
 
 export async function getDashboardStats(tenantId: string): Promise<DashboardStats | null> {
+  const supabase = createClient()
   const { data, error } = await supabase
     .rpc('get_dashboard_stats', { p_tenant_id: tenantId })
 
@@ -86,6 +88,7 @@ export async function getDashboardStats(tenantId: string): Promise<DashboardStat
 }
 
 export async function getMonthlyRevenue(tenantId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('monthly_revenue')
     .select('*')
@@ -98,6 +101,7 @@ export async function getMonthlyRevenue(tenantId: string) {
 }
 
 export async function getRentalStatusDistribution(tenantId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('rental_status_distribution')
     .select('*')

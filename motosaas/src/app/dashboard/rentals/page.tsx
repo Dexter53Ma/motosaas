@@ -3,6 +3,15 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import { PageTransition } from '@/components/PageTransition'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { cn } from '@/lib/utils'
+import { useI18n } from '@/lib/i18n'
+import { Search, Plus, Car, Clock, AlertTriangle, DollarSign, AlertCircle } from 'lucide-react'
 
 interface Rental {
   id: string
@@ -29,17 +38,32 @@ interface Rental {
 }
 
 export default function RentalsPage() {
+  const { t } = useI18n()
   const [rentals, setRentals] = useState<Rental[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [tenantId, setTenantId] = useState<string | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).single()
+      if (userData) setTenantId(userData.tenant_id)
+    }
+    init()
+  }, [supabase])
+
+  useEffect(() => {
+    if (!tenantId) return
+
     const getRentals = async () => {
       let query = supabase
         .from('rentals')
         .select('*, customers(full_name, phone), vehicles(make, model, year, license_plate)')
+        .eq('tenant_id', tenantId)
 
       // Apply status filter
       if (statusFilter !== 'all') {
@@ -61,15 +85,15 @@ export default function RentalsPage() {
     }
 
     getRentals()
-  }, [supabase, search, statusFilter])
+  }, [supabase, search, statusFilter, tenantId])
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active': return 'bg-green-100 text-green-800'
-      case 'completed': return 'bg-gray-100 text-gray-800'
-      case 'overdue': return 'bg-red-100 text-red-800'
-      case 'cancelled': return 'bg-yellow-100 text-yellow-800'
-      default: return 'bg-gray-100 text-gray-800'
+      case 'active': return 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+      case 'completed': return 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+      case 'overdue': return 'bg-red-100 text-red-800 hover:bg-red-200'
+      case 'cancelled': return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+      default: return 'bg-gray-100 text-gray-800 hover:bg-gray-200'
     }
   }
 
@@ -86,6 +110,8 @@ export default function RentalsPage() {
 
   // Check for overdue rentals
   useEffect(() => {
+    if (!tenantId) return
+
     const checkOverdueRentals = async () => {
       const now = new Date().toISOString()
       const { data } = await supabase
@@ -93,188 +119,230 @@ export default function RentalsPage() {
         .update({ status: 'overdue' })
         .lt('end_date', now)
         .eq('status', 'active')
+        .eq('tenant_id', tenantId)
         .select()
 
       if (data && data.length > 0) {
         // Refresh the list
-        setRentals(prev => prev.map(r => 
+        setRentals(prev => prev.map(r =>
           data.find((d: Rental) => d.id === r.id) ? { ...r, status: 'overdue' } : r
         ))
       }
     }
 
     checkOverdueRentals()
-  }, [supabase])
+  }, [supabase, tenantId])
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Rentals</h1>
-          <p className="text-gray-600">Manage your rental bookings</p>
-        </div>
-        <Link
-          href="/dashboard/rentals/new"
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium"
-        >
-          New Rental
-        </Link>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-500">Total</p>
-          <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-500">Active</p>
-          <p className="text-2xl font-bold text-green-600">{stats.active}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-500">Overdue</p>
-          <p className="text-2xl font-bold text-red-600">{stats.overdue}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-500">Revenue</p>
-          <p className="text-2xl font-bold text-blue-600">{stats.totalRevenue.toLocaleString()} MAD</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-500">Late Fees</p>
-          <p className="text-2xl font-bold text-orange-600">{stats.totalLateFees.toLocaleString()} MAD</p>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4 mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <input
-              type="text"
-              placeholder="Search by customer name or plate..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
+    <PageTransition>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
           <div>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="completed">Completed</option>
-              <option value="overdue">Overdue</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
+            <h1 className="text-2xl font-bold text-gray-900">{t('rentals.title')}</h1>
+            <p className="text-gray-600">{t('rentals.manage')}</p>
           </div>
-        </div>
-      </div>
-
-      {/* Rental list */}
-      {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        </div>
-      ) : rentals.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-12 text-center">
-          <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No rentals yet</h3>
-          <p className="text-gray-500 mb-4">Get started by creating your first rental</p>
-          <Link
-            href="/dashboard/rentals/new"
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium"
-          >
-            New Rental
+          <Link href="/dashboard/rentals/new">
+            <Button className="bg-emerald-600 hover:bg-emerald-700">
+              <Plus className="h-4 w-4 mr-2" />
+              {t('rentals.add')}
+            </Button>
           </Link>
         </div>
-      ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Customer
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Vehicle
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Dates
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Amount
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {rentals.map((rental) => (
-                <tr key={rental.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {rental.customers?.full_name}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {rental.customers?.phone}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {rental.vehicles?.year} {rental.vehicles?.make} {rental.vehicles?.model}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {rental.vehicles?.license_plate}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      {new Date(rental.start_date).toLocaleDateString()} - {new Date(rental.end_date).toLocaleDateString()}
-                    </div>
-                    {rental.actual_return_date && (
-                      <div className="text-sm text-gray-500">
-                        Returned: {new Date(rental.actual_return_date).toLocaleDateString()}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {rental.total_amount.toLocaleString()} MAD
-                    </div>
-                    {rental.late_fee > 0 && (
-                      <div className="text-sm text-red-600">
-                        +{rental.late_fee.toLocaleString()} MAD late
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(rental.status)}`}>
-                      {rental.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <Link
-                      href={`/dashboard/rentals/${rental.id}`}
-                      className="text-blue-600 hover:text-blue-900"
-                    >
-                      View
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <Card className="border-l-4 border-l-emerald-500">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-lg">
+                  <Car className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">{t('common.total')}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-l-4 border-l-green-500">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <Clock className="h-5 w-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">{t('rentals.active')}</p>
+                  <p className="text-2xl font-bold text-green-600">{stats.active}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-l-4 border-l-red-500">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-100 rounded-lg">
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">{t('rentals.overdue')}</p>
+                  <p className="text-2xl font-bold text-red-600">{stats.overdue}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-l-4 border-l-blue-500">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <DollarSign className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">{t('dashboard.revenue')}</p>
+                  <p className="text-2xl font-bold text-blue-600">{stats.totalRevenue.toLocaleString()} MAD</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-l-4 border-l-orange-500">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-orange-100 rounded-lg">
+                  <AlertCircle className="h-5 w-5 text-orange-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">{t('rentals.late_fees')}</p>
+                  <p className="text-2xl font-bold text-orange-600">{stats.totalLateFees.toLocaleString()} MAD</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      )}
-    </div>
+
+        {/* Filters */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder={t('rentals.search')}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-10 border-emerald-200 focus:border-emerald-500 focus:ring-emerald-500"
+                />
+              </div>
+              <div>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="h-10 px-4 border border-emerald-200 rounded-md focus:ring-emerald-500 focus:border-emerald-500 bg-white text-sm"
+                >
+                  <option value="all">{t('rentals.all_status')}</option>
+                  <option value="active">{t('rentals.active')}</option>
+                  <option value="completed">{t('rentals.completed')}</option>
+                  <option value="overdue">{t('rentals.overdue')}</option>
+                  <option value="cancelled">{t('rentals.cancelled')}</option>
+                </select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Rental list */}
+        {loading ? (
+          <Card>
+            <CardContent className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+            </CardContent>
+          </Card>
+        ) : rentals.length === 0 ? (
+          <Card>
+            <CardContent className="p-12 text-center">
+              <Car className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">{t('rentals.no_rentals')}</h3>
+              <p className="text-gray-500 mb-4">{t('rentals.empty_state')}</p>
+              <Link href="/dashboard/rentals/new">
+                <Button className="bg-emerald-600 hover:bg-emerald-700">
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Rental
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('common.customer')}</TableHead>
+                  <TableHead>{t('common.vehicle')}</TableHead>
+                  <TableHead>{t('rentals.dates')}</TableHead>
+                  <TableHead>{t('common.amount')}</TableHead>
+                  <TableHead>{t('common.status')}</TableHead>
+                  <TableHead className="text-right">{t('common.actions')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rentals.map((rental) => (
+                  <TableRow key={rental.id}>
+                    <TableCell>
+                      <div className="font-medium text-gray-900">
+                        {rental.customers?.full_name}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {rental.customers?.phone}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-medium text-gray-900">
+                        {rental.vehicles?.year} {rental.vehicles?.make} {rental.vehicles?.model}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {rental.vehicles?.license_plate}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm text-gray-900">
+                        {new Date(rental.start_date).toLocaleDateString()} - {new Date(rental.end_date).toLocaleDateString()}
+                      </div>
+                      {rental.actual_return_date && (
+                        <div className="text-sm text-gray-500">
+                          Returned: {new Date(rental.actual_return_date).toLocaleDateString()}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-medium text-gray-900">
+                        {rental.total_amount.toLocaleString()} MAD
+                      </div>
+                      {rental.late_fee > 0 && (
+                        <div className="text-sm text-red-600">
+                          +{rental.late_fee.toLocaleString()} MAD late
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="secondary"
+                        className={cn(getStatusColor(rental.status))}
+                      >
+                        {rental.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Link href={`/dashboard/rentals/${rental.id}`}>
+                        <Button variant="ghost" size="sm" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                          {t('common.view')}
+                        </Button>
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        )}
+      </div>
+    </PageTransition>
   )
 }

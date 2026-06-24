@@ -2,11 +2,17 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
+import { PageTransition } from '@/components/PageTransition'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Settings, MessageSquare, Plus, Pencil, Trash2, CheckCircle, XCircle } from 'lucide-react'
 import { getWhatsAppConfig, updateWhatsAppConfig, getTemplates, createTemplate, updateTemplate, deleteTemplate, type WhatsAppTemplate } from '@/lib/whatsapp'
+import { useI18n } from '@/lib/i18n'
 
 export default function WhatsAppSettingsPage() {
+  const { t } = useI18n()
   const [config, setConfig] = useState<any>(null)
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([])
   const [loading, setLoading] = useState(true)
@@ -22,7 +28,6 @@ export default function WhatsAppSettingsPage() {
     subject: '',
     body: '',
   })
-  const router = useRouter()
   const supabase = createClient()
 
   useEffect(() => { fetchData() }, [])
@@ -58,7 +63,7 @@ export default function WhatsAppSettingsPage() {
       if (!userData) throw new Error('No tenant found')
 
       await updateWhatsAppConfig(userData.tenant_id, config || {})
-      setSuccess('Configuration saved successfully')
+      setSuccess(t('common.success'))
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -105,7 +110,7 @@ export default function WhatsAppSettingsPage() {
   }
 
   async function handleDeleteTemplate(id: string) {
-    if (!confirm('Are you sure you want to delete this template?')) return
+    if (!confirm(t('whatsapp.delete_confirm'))) return
 
     try {
       await deleteTemplate(id)
@@ -129,210 +134,194 @@ export default function WhatsAppSettingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <nav className="bg-white shadow-sm border-b">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between h-16">
-              <div className="flex items-center space-x-8">
-                <Link href="/dashboard" className="text-xl font-bold text-gray-900">MotoRent</Link>
-              </div>
-            </div>
-          </div>
-        </nav>
-        <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-          <p className="text-center text-gray-500">Loading...</p>
-        </main>
-      </div>
+      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <p className="text-center text-gray-500">{t('common.loading')}</p>
+      </main>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center space-x-8">
-              <Link href="/dashboard" className="text-xl font-bold text-gray-900">MotoRent</Link>
-              <div className="hidden md:flex space-x-4">
-                <Link href="/dashboard" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium">Dashboard</Link>
-                <Link href="/dashboard/vehicles" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium">Vehicles</Link>
-                <Link href="/dashboard/customers" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium">Customers</Link>
-                <Link href="/dashboard/rentals" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium">Rentals</Link>
-                <Link href="/dashboard/payments" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium">Payments</Link>
-                <Link href="/dashboard/whatsapp" className="text-gray-900 font-semibold px-3 py-2 text-sm">WhatsApp</Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </nav>
-
+    <PageTransition>
       <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">WhatsApp Settings</h1>
-            <p className="text-gray-600">Configure WhatsApp integration and message templates</p>
+            <h1 className="text-2xl font-bold text-gray-900">{t('whatsapp.title')}</h1>
+            <p className="text-gray-600">{t('whatsapp.desc')}</p>
           </div>
         </div>
 
         {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg mb-4">{error}</div>}
-        {success && <div className="bg-green-50 text-green-700 p-4 rounded-lg mb-4">{success}</div>}
+        {success && <div className="bg-emerald-50 text-emerald-700 p-4 rounded-lg mb-4">{success}</div>}
 
-        {/* Connection Status */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <h2 className="text-lg font-medium mb-4">Connection Status</h2>
-          <div className="flex items-center gap-4">
-            <div className={`w-3 h-3 rounded-full ${config?.is_connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-            <span className="font-medium">{config?.is_connected ? 'Connected' : 'Not Connected'}</span>
-          </div>
-          {config?.phone_number && (
-            <p className="text-gray-600 mt-2">Phone: {config.phone_number}</p>
-          )}
-        </div>
-
-        {/* Configuration */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <h2 className="text-lg font-medium mb-4">Configuration</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-              <input
-                type="text"
-                value={config?.phone_number || ''}
-                onChange={(e) => setConfig({ ...config, phone_number: e.target.value })}
-                placeholder="+212 600 000 000"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              />
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              {t('whatsapp.connection_status')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              <div className={`w-3 h-3 rounded-full ${config?.is_connected ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+              <span className="font-medium">{config?.is_connected ? t('whatsapp.connected') : t('whatsapp.not_connected')}</span>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Business Name</label>
-              <input
-                type="text"
-                value={config?.business_name || ''}
-                onChange={(e) => setConfig({ ...config, business_name: e.target.value })}
-                placeholder="Your Business Name"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <button
-              onClick={handleSaveConfig}
-              disabled={saving}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : 'Save Configuration'}
-            </button>
-          </div>
-        </div>
+            {config?.phone_number && (
+              <p className="text-gray-600 mt-2">{t('whatsapp.phone')}: {config.phone_number}</p>
+            )}
+          </CardContent>
+        </Card>
 
-        {/* Templates */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-medium">Message Templates</h2>
-            <button
-              onClick={() => { setShowTemplateForm(true); setEditingTemplate(null); setTemplateForm({ name: '', category: 'rental_confirmation', language: 'fr', subject: '', body: '' }) }}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-            >
-              + New Template
-            </button>
-          </div>
-
-          {showTemplateForm && (
-            <div className="border rounded-lg p-4 mb-4 bg-gray-50">
-              <h3 className="font-medium mb-3">{editingTemplate ? 'Edit Template' : 'New Template'}</h3>
-              <div className="space-y-3">
-                <input
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>{t('whatsapp.configuration')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <Label>{t('whatsapp.phone_number')}</Label>
+                <Input
                   type="text"
-                  placeholder="Template Name"
-                  value={templateForm.name}
-                  onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  value={config?.phone_number || ''}
+                  onChange={(e) => setConfig({ ...config, phone_number: e.target.value })}
+                  placeholder="+212 600 000 000"
                 />
-                <div className="flex gap-3">
-                  <select
-                    value={templateForm.category}
-                    onChange={(e) => setTemplateForm({ ...templateForm, category: e.target.value })}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg"
-                  >
-                    <option value="rental_confirmation">Rental Confirmation</option>
-                    <option value="payment_reminder">Payment Reminder</option>
-                    <option value="return_reminder">Return Reminder</option>
-                    <option value="invoice">Invoice</option>
-                    <option value="promotion">Promotion</option>
-                    <option value="custom">Custom</option>
-                  </select>
-                  <select
-                    value={templateForm.language}
-                    onChange={(e) => setTemplateForm({ ...templateForm, language: e.target.value })}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg"
-                  >
-                    <option value="fr">French</option>
-                    <option value="ar">Arabic</option>
-                    <option value="en">English</option>
-                  </select>
-                </div>
-                <textarea
-                  placeholder="Message body. Use {{variable_name}} for dynamic content."
-                  value={templateForm.body}
-                  onChange={(e) => setTemplateForm({ ...templateForm, body: e.target.value })}
-                  rows={5}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              </div>
+              <div>
+                <Label>{t('whatsapp.business_name')}</Label>
+                <Input
+                  type="text"
+                  value={config?.business_name || ''}
+                  onChange={(e) => setConfig({ ...config, business_name: e.target.value })}
+                  placeholder={t('whatsapp.business_name')}
                 />
-                <p className="text-sm text-gray-500">
-                  Available variables: {'{{customer_name}}'}, {'{{vehicle_make}}'}, {'{{vehicle_model}}'}, {'{{start_date}}'}, {'{{end_date}}'}, {'{{daily_rate}}'}, {'{{amount}}'}, {'{{return_date}}'}
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleSaveTemplate}
-                    disabled={saving || !templateForm.name || !templateForm.body}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {saving ? 'Saving...' : 'Save Template'}
-                  </button>
-                  <button
-                    onClick={() => { setShowTemplateForm(false); setEditingTemplate(null) }}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
+              </div>
+              <Button onClick={handleSaveConfig} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
+                {saving ? t('common.loading') : t('whatsapp.save_config')}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5" />
+                {t('whatsapp.message_templates')}
+              </CardTitle>
+              <Button
+                onClick={() => { setShowTemplateForm(true); setEditingTemplate(null); setTemplateForm({ name: '', category: 'rental_confirmation', language: 'fr', subject: '', body: '' }) }}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                {t('whatsapp.new_template')}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {showTemplateForm && (
+              <div className="border rounded-lg p-4 mb-4 bg-gray-50">
+                <h3 className="font-medium mb-3">{editingTemplate ? t('whatsapp.edit_template') : t('whatsapp.new_template')}</h3>
+                <div className="space-y-3">
+                  <Input
+                    placeholder={t('whatsapp.template_name')}
+                    value={templateForm.name}
+                    onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
+                  />
+                  <div className="flex gap-3">
+                    <select
+                      value={templateForm.category}
+                      onChange={(e) => setTemplateForm({ ...templateForm, category: e.target.value })}
+                      className="flex-1 h-8 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base md:text-sm"
+                    >
+                      <option value="rental_confirmation">{t('whatsapp.rental_confirmation')}</option>
+                      <option value="payment_reminder">{t('whatsapp.payment_reminder')}</option>
+                      <option value="return_reminder">{t('whatsapp.return_reminder')}</option>
+                      <option value="invoice">{t('whatsapp.invoice')}</option>
+                      <option value="promotion">{t('whatsapp.promotion')}</option>
+                      <option value="custom">{t('whatsapp.custom')}</option>
+                    </select>
+                    <select
+                      value={templateForm.language}
+                      onChange={(e) => setTemplateForm({ ...templateForm, language: e.target.value })}
+                      className="flex-1 h-8 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base md:text-sm"
+                    >
+                      <option value="fr">French</option>
+                      <option value="ar">Arabic</option>
+                      <option value="en">English</option>
+                    </select>
+                  </div>
+                  <textarea
+                    placeholder={t('whatsapp.message_hint')}
+                    value={templateForm.body}
+                    onChange={(e) => setTemplateForm({ ...templateForm, body: e.target.value })}
+                    rows={5}
+                    className="w-full min-h-[100px] rounded-lg border border-input bg-transparent px-2.5 py-1 text-base md:text-sm placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                  />
+                  <p className="text-sm text-gray-500">
+                    {t('whatsapp.variables_hint')}: {'{{customer_name}}'}, {'{{vehicle_make}}'}, {'{{vehicle_model}}'}, {'{{start_date}}'}, {'{{end_date}}'}, {'{{daily_rate}}'}, {'{{amount}}'}, {'{{return_date}}'}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleSaveTemplate}
+                      disabled={saving || !templateForm.name || !templateForm.body}
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                    >
+                      {saving ? t('common.loading') : t('whatsapp.save_template')}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => { setShowTemplateForm(false); setEditingTemplate(null) }}
+                    >
+                      {t('common.cancel')}
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {templates.length === 0 ? (
-            <p className="text-gray-500 text-center py-4">No templates yet. Create one to get started.</p>
-          ) : (
-            <div className="space-y-3">
-              {templates.map((template) => (
-                <div key={template.id} className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{template.name}</p>
-                      <p className="text-sm text-gray-500">
-                        {template.category.replace('_', ' ')} • {template.language.toUpperCase()}
-                      </p>
+            {templates.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">{t('whatsapp.no_templates')}</p>
+            ) : (
+              <div className="space-y-3">
+                {templates.map((template) => (
+                  <div key={template.id} className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">{template.name}</p>
+                        <p className="text-sm text-gray-500">
+                          {template.category.replace('_', ' ')} • {template.language.toUpperCase()}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditTemplate(template)}
+                          className="text-emerald-600 hover:text-emerald-700"
+                        >
+                          <Pencil className="h-4 w-4 mr-1" />
+                          {t('common.edit')}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteTemplate(template.id)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          {t('common.delete')}
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleEditTemplate(template)}
-                        className="text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteTemplate(template.id)}
-                        className="text-red-600 hover:text-red-800 text-sm"
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    <p className="mt-2 text-sm text-gray-600 whitespace-pre-line">{template.body}</p>
                   </div>
-                  <p className="mt-2 text-sm text-gray-600 whitespace-pre-line">{template.body}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </main>
-    </div>
+    </PageTransition>
   )
 }

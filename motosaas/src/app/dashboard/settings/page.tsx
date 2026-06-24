@@ -2,6 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { toast } from 'sonner'
+import { PageTransition } from '@/components/PageTransition'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Loader2, Save, Building2, CreditCard } from 'lucide-react'
+import { useI18n } from '@/lib/i18n'
 
 interface Tenant {
   id: string
@@ -23,6 +31,7 @@ interface UserProfile {
 }
 
 export default function SettingsPage() {
+  const { t } = useI18n()
   const [tenant, setTenant] = useState<Tenant | null>(null)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -36,7 +45,6 @@ export default function SettingsPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Get user profile
       const { data: profile } = await supabase
         .from('users')
         .select('*')
@@ -46,7 +54,6 @@ export default function SettingsPage() {
       if (profile) {
         setUserProfile(profile)
 
-        // Get tenant
         const { data: tenantData } = await supabase
           .from('tenants')
           .select('*')
@@ -66,9 +73,8 @@ export default function SettingsPage() {
   const handleSave = async () => {
     if (!tenant || !userProfile) return
 
-    // Only owners can update settings
     if (userProfile.role !== 'owner') {
-      setError('Only the shop owner can modify settings')
+      setError(t('settings.owner_only'))
       return
     }
 
@@ -89,8 +95,10 @@ export default function SettingsPage() {
 
     if (error) {
       setError(error.message)
+      toast.error(t('settings.saved'))
     } else {
       setSuccess(true)
+      toast.success(t('settings.saved'))
       setTimeout(() => setSuccess(false), 3000)
     }
     setSaving(false)
@@ -99,153 +107,180 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <Loader2 className="animate-spin h-8 w-8 text-emerald-600" />
       </div>
     )
   }
 
   const isOwner = userProfile?.role === 'owner'
 
+  const statusConfig: Record<string, { label: string; className: string }> = {
+    trial: { label: t('settings.free_trial'), className: 'bg-blue-100 text-blue-700 border-blue-200' },
+    active: { label: t('settings.active'), className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+    expired: { label: t('settings.expired'), className: 'bg-red-100 text-red-700 border-red-200' },
+    suspended: { label: t('settings.suspended'), className: 'bg-gray-100 text-gray-700 border-gray-200' },
+  }
+
   return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Shop Settings</h1>
+    <PageTransition>
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">{t('settings.title')}</h1>
 
-      {!isOwner && (
-        <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded mb-6">
-          Only the shop owner can modify these settings. You have view-only access.
-        </div>
-      )}
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-6">
-          Settings saved successfully!
-        </div>
-      )}
-
-      <div className="bg-white shadow rounded-lg">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-medium text-gray-900">Basic Information</h2>
-          <p className="mt-1 text-sm text-gray-500">Update your shop&apos;s basic details</p>
-        </div>
-
-        <div className="p-6 space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Shop Name</label>
-            <input
-              type="text"
-              value={tenant?.name || ''}
-              onChange={(e) => setTenant({ ...tenant!, name: e.target.value })}
-              disabled={!isOwner}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Shop Phone</label>
-            <input
-              type="tel"
-              value={tenant?.phone || ''}
-              onChange={(e) => setTenant({ ...tenant!, phone: e.target.value })}
-              disabled={!isOwner}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-              placeholder="+212 5XX-XXXXXX"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Address</label>
-            <input
-              type="text"
-              value={tenant?.address || ''}
-              onChange={(e) => setTenant({ ...tenant!, address: e.target.value })}
-              disabled={!isOwner}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-              placeholder="123 Rue Mohammed V, Casablanca"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Email</label>
-            <input
-              type="email"
-              value={tenant?.email || ''}
-              disabled
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-500"
-            />
-            <p className="mt-1 text-sm text-gray-500">Email cannot be changed</p>
-          </div>
-        </div>
-
-        <div className="p-6 border-t border-gray-200">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Business Information</h2>
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Tax ID (ICE)</label>
-              <input
-                type="text"
-                value={tenant?.tax_id || ''}
-                onChange={(e) => setTenant({ ...tenant!, tax_id: e.target.value })}
-                disabled={!isOwner}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-                placeholder="001234567000001"
-              />
-              <p className="mt-1 text-sm text-gray-500">Identifiant Commun de l&apos;Entreprise</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">RC Number</label>
-              <input
-                type="text"
-                value={tenant?.rc_number || ''}
-                onChange={(e) => setTenant({ ...tenant!, rc_number: e.target.value })}
-                disabled={!isOwner}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-                placeholder="12345"
-              />
-              <p className="mt-1 text-sm text-gray-500">Registre Commerce number</p>
-            </div>
-          </div>
-        </div>
-
-        {isOwner && (
-          <div className="p-6 border-t border-gray-200">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
+        {!isOwner && (
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded mb-6">
+            {t('settings.owner_only')}
           </div>
         )}
-      </div>
 
-      {/* Subscription Info */}
-      <div className="mt-6 bg-white shadow rounded-lg">
-        <div className="p-6">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Subscription</h2>
-          <div className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-600">Status</span>
-              <span className={`text-sm font-medium ${
-                tenant?.subscription_status === 'active' ? 'text-green-600' :
-                tenant?.subscription_status === 'trial' ? 'text-blue-600' :
-                'text-red-600'
-              }`}>
-                {tenant?.subscription_status === 'trial' ? 'Free Trial' :
-                 tenant?.subscription_status === 'active' ? 'Active' :
-                 tenant?.subscription_status === 'expired' ? 'Expired' : 'Suspended'}
-              </span>
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded mb-6">
+            {t('settings.saved')}
+          </div>
+        )}
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-emerald-600" />
+              <div>
+                <CardTitle>{t('settings.basic_info')}</CardTitle>
+                <p className="text-sm text-gray-500 mt-1">{t('settings.basic_info_desc')}</p>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('settings.shop_name')}</label>
+              <Input
+                type="text"
+                value={tenant?.name || ''}
+                onChange={(e) => setTenant({ ...tenant!, name: e.target.value })}
+                disabled={!isOwner}
+                className="focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('settings.shop_phone')}</label>
+              <Input
+                type="tel"
+                value={tenant?.phone || ''}
+                onChange={(e) => setTenant({ ...tenant!, phone: e.target.value })}
+                disabled={!isOwner}
+                placeholder="+212 5XX-XXXXXX"
+                className="focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('settings.address')}</label>
+              <Input
+                type="text"
+                value={tenant?.address || ''}
+                onChange={(e) => setTenant({ ...tenant!, address: e.target.value })}
+                disabled={!isOwner}
+                placeholder="123 Rue Mohammed V, Casablanca"
+                className="focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('settings.email')}</label>
+              <Input
+                type="email"
+                value={tenant?.email || ''}
+                disabled
+                className="bg-gray-50 text-gray-500"
+              />
+              <p className="mt-1 text-sm text-gray-500">{t('settings.email_cannot_change')}</p>
+            </div>
+          </CardContent>
+
+          <div className="px-6 pb-6">
+            <Card className="border-emerald-200">
+              <CardHeader>
+                <CardTitle className="text-base">{t('settings.business_info')}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('settings.tax_id')}</label>
+                  <Input
+                    type="text"
+                    value={tenant?.tax_id || ''}
+                    onChange={(e) => setTenant({ ...tenant!, tax_id: e.target.value })}
+                    disabled={!isOwner}
+                    placeholder="001234567000001"
+                    className="focus:ring-emerald-500 focus:border-emerald-500"
+                  />
+                  <p className="mt-1 text-sm text-gray-500">Identifiant Commun de l&apos;Entreprise</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('settings.rc_number')}</label>
+                  <Input
+                    type="text"
+                    value={tenant?.rc_number || ''}
+                    onChange={(e) => setTenant({ ...tenant!, rc_number: e.target.value })}
+                    disabled={!isOwner}
+                    placeholder="12345"
+                    className="focus:ring-emerald-500 focus:border-emerald-500"
+                  />
+                  <p className="mt-1 text-sm text-gray-500">Registre Commerce number</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {isOwner && (
+            <div className="px-6 pb-6">
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="w-full bg-emerald-600 hover:bg-emerald-700"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {t('common.loading')}
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    {t('settings.save_changes')}
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </Card>
+
+        <Card className="mt-6">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-emerald-600" />
+              <CardTitle>{t('settings.subscription')}</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">{t('common.status')}</span>
+              <Badge
+                variant="outline"
+                className={statusConfig[tenant?.subscription_status || '']?.className || 'bg-gray-100 text-gray-700 border-gray-200'}
+              >
+                {statusConfig[tenant?.subscription_status || '']?.label || tenant?.subscription_status}
+              </Badge>
             </div>
             {tenant?.subscription_status === 'trial' && tenant?.trial_ends_at && (
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Trial ends</span>
+                <span className="text-sm text-gray-600">{t('settings.trial_ends')}</span>
                 <span className="text-sm text-gray-900">
                   {new Date(tenant.trial_ends_at).toLocaleDateString('en-GB', {
                     day: 'numeric',
@@ -256,16 +291,16 @@ export default function SettingsPage() {
               </div>
             )}
             <div className="flex justify-between">
-              <span className="text-sm text-gray-600">Plan</span>
-              <span className="text-sm text-gray-900">Pro</span>
+              <span className="text-sm text-gray-600">{t('settings.plan')}</span>
+              <span className="text-sm text-gray-900">{t('settings.pro')}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm text-gray-600">Price</span>
+              <span className="text-sm text-gray-600">{t('settings.price')}</span>
               <span className="text-sm text-gray-900">100 MAD/month or 500 MAD/year</span>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </PageTransition>
   )
 }

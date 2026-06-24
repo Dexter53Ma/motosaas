@@ -1,17 +1,32 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import CalendarView from '@/components/CalendarView'
+import { useI18n } from '@/lib/i18n'
 
 export default function CalendarPage() {
+  const { t } = useI18n()
   const [events, setEvents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedEvent, setSelectedEvent] = useState<any>(null)
+  const [tenantId, setTenantId] = useState<string | null>(null)
   const supabase = createClient()
 
-  useEffect(() => { fetchEvents() }, [])
+  useEffect(() => {
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).single()
+      if (userData) setTenantId(userData.tenant_id)
+    }
+    init()
+  }, [supabase])
+
+  useEffect(() => {
+    if (tenantId) fetchEvents()
+  }, [tenantId])
 
   async function fetchEvents() {
     setLoading(true)
@@ -19,6 +34,7 @@ export default function CalendarPage() {
     const { data: rentals } = await supabase
       .from('rentals')
       .select('*, vehicle:vehicles(make, model, license_plate), customer:customers(full_name)')
+      .eq('tenant_id', tenantId!)
       .gte('start_date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
       .lte('end_date', new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString())
 
@@ -39,31 +55,11 @@ export default function CalendarPage() {
   }
 
   if (loading) {
-    return <div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>
+    return <div className="min-h-screen bg-gray-50 flex items-center justify-center">{t('common.loading')}</div>
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center space-x-8">
-              <Link href="/dashboard" className="text-xl font-bold text-gray-900">MotoRent</Link>
-              <h1 className="text-lg font-medium">Calendar</h1>
-            </div>
-            <div className="flex items-center gap-4">
-              <Link
-                href="/dashboard/rentals/new"
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                New Rental
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+    <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <CalendarView
@@ -73,32 +69,32 @@ export default function CalendarPage() {
           </div>
 
           <div className="bg-white rounded-lg shadow p-4">
-            <h3 className="font-medium mb-4">Event Details</h3>
+            <h3 className="font-medium mb-4">{t('calendar.event_details')}</h3>
             {selectedEvent ? (
               <div className="space-y-3">
                 <div>
-                  <p className="text-sm text-gray-500">Type</p>
+                  <p className="text-sm text-gray-500">{t('calendar.type')}</p>
                   <p className="font-medium capitalize">{selectedEvent.type}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Customer</p>
+                  <p className="text-sm text-gray-500">{t('calendar.customer')}</p>
                   <p className="font-medium">{selectedEvent.customer?.full_name || 'N/A'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Vehicle</p>
+                  <p className="text-sm text-gray-500">{t('calendar.vehicle')}</p>
                   <p className="font-medium">
                     {selectedEvent.vehicle?.make} {selectedEvent.vehicle?.model}
                   </p>
                   <p className="text-sm text-gray-500">{selectedEvent.vehicle?.license_plate}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Period</p>
+                  <p className="text-sm text-gray-500">{t('calendar.period')}</p>
                   <p className="font-medium">
                     {new Date(selectedEvent.start).toLocaleDateString('fr-FR')} - {new Date(selectedEvent.end).toLocaleDateString('fr-FR')}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Status</p>
+                  <p className="text-sm text-gray-500">{t('calendar.status')}</p>
                   <span className={`px-2 py-1 rounded text-xs font-medium ${
                     selectedEvent.status === 'active' ? 'bg-green-100 text-green-800' :
                     selectedEvent.status === 'overdue' ? 'bg-red-100 text-red-800' :
@@ -111,19 +107,18 @@ export default function CalendarPage() {
                   href={`/dashboard/rentals/${selectedEvent.id}`}
                   className="block w-full text-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
-                  View Rental
+                  {t('calendar.view_rental')}
                 </Link>
               </div>
             ) : (
-              <p className="text-gray-500 text-sm">Click an event to see details</p>
+              <p className="text-gray-500 text-sm">{t('calendar.click_event')}</p>
             )}
           </div>
         </div>
 
-        {/* Upcoming Rentals */}
         <div className="mt-6 bg-white rounded-lg shadow">
           <div className="p-4 border-b">
-            <h3 className="font-medium">Upcoming Rentals</h3>
+            <h3 className="font-medium">{t('calendar.upcoming')}</h3>
           </div>
           <div className="divide-y">
             {events
@@ -155,11 +150,10 @@ export default function CalendarPage() {
                 </Link>
               ))}
             {events.filter((e) => new Date(e.start) > new Date()).length === 0 && (
-              <div className="p-4 text-center text-gray-500">No upcoming rentals</div>
+              <div className="p-4 text-center text-gray-500">{t('calendar.no_upcoming')}</div>
             )}
           </div>
         </div>
       </main>
-    </div>
   )
 }

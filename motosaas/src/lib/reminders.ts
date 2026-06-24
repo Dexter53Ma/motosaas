@@ -1,8 +1,6 @@
 import { createClient } from '@/lib/supabase/client'
 import { sendMessage, renderTemplate, getTemplates } from '@/lib/whatsapp'
 
-const supabase = createClient()
-
 export interface ReminderSettings {
   id: string
   tenant_id: string
@@ -45,6 +43,7 @@ export interface ReminderHistory {
 }
 
 export async function getReminderSettings(tenantId: string): Promise<ReminderSettings | null> {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('reminder_settings')
     .select('*')
@@ -56,6 +55,7 @@ export async function getReminderSettings(tenantId: string): Promise<ReminderSet
 }
 
 export async function updateReminderSettings(tenantId: string, settings: Partial<ReminderSettings>) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('reminder_settings')
     .upsert({ tenant_id: tenantId, ...settings, updated_at: new Date().toISOString() })
@@ -67,6 +67,7 @@ export async function updateReminderSettings(tenantId: string, settings: Partial
 }
 
 export async function scheduleReminders(rentalId: string, tenantId: string, customerId: string, endDate: string) {
+  const supabase = createClient()
   const settings = await getReminderSettings(tenantId)
   if (!settings || !settings.enabled) return
 
@@ -109,6 +110,7 @@ export async function scheduleReminders(rentalId: string, tenantId: string, cust
 }
 
 export async function getPendingReminders(tenantId: string): Promise<ReminderQueue[]> {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('reminder_queue')
     .select('*')
@@ -122,6 +124,7 @@ export async function getPendingReminders(tenantId: string): Promise<ReminderQue
 }
 
 export async function processPendingReminders(tenantId: string) {
+  const supabase = createClient()
   const pendingReminders = await getPendingReminders(tenantId)
   const results = []
 
@@ -193,14 +196,21 @@ export async function processPendingReminders(tenantId: string) {
 }
 
 export async function getOverdueRentals(tenantId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
-    .rpc('get_overdue_rentals', { p_tenant_id: tenantId })
+    .from('rentals')
+    .select('id, customer_id, vehicle_id, end_date, total_amount, customer:customers(full_name, phone), vehicle:vehicles(make, model, plate_number)')
+    .eq('tenant_id', tenantId)
+    .eq('status', 'active')
+    .lt('end_date', new Date().toISOString())
+    .order('end_date', { ascending: true })
 
   if (error) throw error
   return data || []
 }
 
 export async function sendBulkReminders(tenantId: string, rentalIds: string[]) {
+  const supabase = createClient()
   const results = []
 
   for (const rentalId of rentalIds) {
@@ -247,6 +257,7 @@ export async function sendBulkReminders(tenantId: string, rentalIds: string[]) {
 }
 
 export async function getReminderHistory(tenantId: string, limit = 50): Promise<ReminderHistory[]> {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('reminder_history')
     .select('*')
@@ -259,6 +270,7 @@ export async function getReminderHistory(tenantId: string, limit = 50): Promise<
 }
 
 export async function getReminderStats(tenantId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('reminder_history')
     .select('status, reminder_type')

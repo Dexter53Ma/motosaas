@@ -111,7 +111,7 @@ export default function PaymentForm({ rentalId, customerId, amount, onPaymentCre
       {rental && (
         <div className="p-3 bg-blue-50 rounded-lg">
           <p className="text-sm font-medium text-blue-800">Rental: {rental.vehicle?.make} {rental.vehicle?.model}</p>
-          <p className="text-sm text-blue-600">Customer: {rental.customer?.first_name} {rental.customer?.last_name}</p>
+          <p className="text-sm text-blue-600">Customer: {rental.customer?.full_name}</p>
           <p className="text-sm text-blue-600">Total: {rental.total_amount} MAD | Paid: {rental.paid_amount || 0} MAD | Balance: {(rental.total_amount - (rental.paid_amount || 0))} MAD</p>
         </div>
       )}

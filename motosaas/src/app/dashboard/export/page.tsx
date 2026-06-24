@@ -2,18 +2,32 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import Link from 'next/link'
-
-const EXPORT_TYPES = [
-  { id: 'customers', label: 'Customers', description: 'All customer data including contact info and rental history' },
-  { id: 'vehicles', label: 'Vehicles', description: 'Vehicle inventory with maintenance and rental stats' },
-  { id: 'rentals', label: 'Rentals', description: 'Rental history with payments and status' },
-  { id: 'payments', label: 'Payments', description: 'All payment transactions with methods and amounts' },
-  { id: 'invoices', label: 'Invoices', description: 'Invoice history with line items and totals' },
-  { id: 'damage_reports', label: 'Damage Reports', description: 'Vehicle damage history with costs' },
-]
+import { PageTransition } from '@/components/PageTransition'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import { Download, FileText, AlertCircle } from 'lucide-react'
+import { useI18n } from '@/lib/i18n'
 
 export default function ExportPage() {
+  const { t } = useI18n()
+  const EXPORT_TYPES = [
+    { id: 'customers', label: t('import.customers_tab'), description: t('export.tenant_filter') },
+    { id: 'vehicles', label: t('import.vehicles_tab'), description: t('export.tenant_filter') },
+    { id: 'rentals', label: t('reports.tab_rentals'), description: t('export.tenant_filter') },
+    { id: 'payments', label: t('import.payments_tab'), description: t('export.tenant_filter') },
+    { id: 'invoices', label: t('documents.invoice'), description: t('export.tenant_filter') },
+    { id: 'damage_reports', label: t('refunds.reason'), description: t('export.tenant_filter') },
+  ]
+
   const [selectedExport, setSelectedExport] = useState<string | null>(null)
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
   const [format, setFormat] = useState('csv')
@@ -31,7 +45,12 @@ export default function ExportPage() {
     setError('')
 
     try {
-      let query = supabase.from(selectedExport).select('*')
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+      const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).single()
+      if (!userData?.tenant_id) throw new Error('No tenant found')
+
+      let query = supabase.from(selectedExport).select('*').eq('tenant_id', userData.tenant_id)
 
       if (dateRange.start) {
         query = query.gte('created_at', dateRange.start)
@@ -94,31 +113,26 @@ export default function ExportPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center space-x-8">
-              <Link href="/dashboard" className="text-xl font-bold text-gray-900">MotoRent</Link>
-              <h1 className="text-lg font-medium">Data Export</h1>
-            </div>
-          </div>
-        </div>
-      </nav>
+    <PageTransition>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">{t('export.title')}</h1>
+        <p className="text-gray-600">{t('export.select_data')}</p>
+      </div>
 
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Export Options */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-lg font-medium mb-4">Select Data to Export</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('export.select_data')}</CardTitle>
+            </CardHeader>
+            <CardContent>
               <div className="space-y-3">
                 {EXPORT_TYPES.map((type) => (
                   <label
                     key={type.id}
                     className={`block p-4 rounded-lg border cursor-pointer transition-colors ${
                       selectedExport === type.id
-                        ? 'border-blue-500 bg-blue-50'
+                        ? 'border-emerald-500 bg-emerald-50'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
@@ -129,7 +143,7 @@ export default function ExportPage() {
                         value={type.id}
                         checked={selectedExport === type.id}
                         onChange={(e) => setSelectedExport(e.target.value)}
-                        className="h-4 w-4 text-blue-600"
+                        className="h-4 w-4 text-emerald-500"
                       />
                       <div>
                         <p className="font-medium">{type.label}</p>
@@ -139,72 +153,80 @@ export default function ExportPage() {
                   </label>
                 ))}
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
+        </div>
 
-          {/* Settings */}
-          <div>
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-lg font-medium mb-4">Export Settings</h2>
-
+        <div>
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('export.settings')}</CardTitle>
+            </CardHeader>
+            <CardContent>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Format</label>
-                  <select
-                    value={format}
-                    onChange={(e) => setFormat(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  >
-                    <option value="csv">CSV (Excel compatible)</option>
-                    <option value="json">JSON (for developers)</option>
-                  </select>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('export.format')}</label>
+                  <Select value={format} onValueChange={(v) => v && setFormat(v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="csv">{t('export.csv')}</SelectItem>
+                      <SelectItem value="json">{t('export.json')}</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date Range (Optional)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('export.date_range')}</label>
                   <div className="space-y-2">
-                    <input
+                    <Input
                       type="date"
                       value={dateRange.start}
                       onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                       placeholder="Start date"
                     />
-                    <input
+                    <Input
                       type="date"
                       value={dateRange.end}
                       onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                       placeholder="End date"
                     />
                   </div>
                 </div>
 
-                {error && <p className="text-red-600 text-sm">{error}</p>}
+                {error && (
+                  <div className="flex items-center gap-2 text-red-600 text-sm">
+                    <AlertCircle className="size-4" />
+                    {error}
+                  </div>
+                )}
 
-                <button
+                <Button
                   onClick={handleExport}
                   disabled={loading || !selectedExport}
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white"
                 >
-                  {loading ? 'Exporting...' : 'Export Data'}
-                </button>
+                  <Download className="size-4 mr-2" />
+                  {loading ? t('export.exporting') : t('export.export_data')}
+                </Button>
               </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            {/* Info */}
-            <div className="bg-gray-50 rounded-lg p-4 mt-4">
-              <h3 className="font-medium text-sm mb-2">Export Notes</h3>
+          <Card className="mt-4">
+            <CardContent className="p-4">
+              <h3 className="font-medium text-sm mb-2">{t('export.notes')}</h3>
               <ul className="text-sm text-gray-600 space-y-1">
-                <li>• Data is filtered by your tenant</li>
-                <li>• Large exports may take a moment</li>
-                <li>• CSV files can be opened in Excel</li>
-                <li>• JSON files are useful for integrations</li>
+                <li className="flex items-center gap-2"><FileText className="size-3 text-emerald-500" /> {t('export.tenant_filter')}</li>
+                <li className="flex items-center gap-2"><FileText className="size-3 text-emerald-500" /> {t('export.large_export')}</li>
+                <li className="flex items-center gap-2"><FileText className="size-3 text-emerald-500" /> {t('export.csv_note')}</li>
+                <li className="flex items-center gap-2"><FileText className="size-3 text-emerald-500" /> {t('export.json_note')}</li>
               </ul>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
-      </main>
-    </div>
+      </div>
+    </PageTransition>
   )
 }

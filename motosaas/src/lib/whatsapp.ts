@@ -1,7 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
 
-const supabase = createClient()
-
 export interface WhatsAppMessage {
   id: string
   tenant_id: string
@@ -36,6 +34,7 @@ export interface WhatsAppTemplate {
 }
 
 export async function getWhatsAppConfig(tenantId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('whatsapp_config')
     .select('*')
@@ -47,6 +46,7 @@ export async function getWhatsAppConfig(tenantId: string) {
 }
 
 export async function updateWhatsAppConfig(tenantId: string, config: Partial<{ phone_number: string; business_name: string; is_connected: boolean }>) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('whatsapp_config')
     .upsert({ tenant_id: tenantId, ...config, updated_at: new Date().toISOString() })
@@ -58,6 +58,7 @@ export async function updateWhatsAppConfig(tenantId: string, config: Partial<{ p
 }
 
 export async function getTemplates(tenantId: string, category?: string) {
+  const supabase = createClient()
   let query = supabase
     .from('whatsapp_templates')
     .select('*')
@@ -75,6 +76,7 @@ export async function getTemplates(tenantId: string, category?: string) {
 }
 
 export async function createTemplate(template: Omit<WhatsAppTemplate, 'id' | 'created_at' | 'updated_at'>) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('whatsapp_templates')
     .insert(template)
@@ -86,6 +88,7 @@ export async function createTemplate(template: Omit<WhatsAppTemplate, 'id' | 'cr
 }
 
 export async function updateTemplate(id: string, updates: Partial<WhatsAppTemplate>) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('whatsapp_templates')
     .update({ ...updates, updated_at: new Date().toISOString() })
@@ -98,6 +101,7 @@ export async function updateTemplate(id: string, updates: Partial<WhatsAppTempla
 }
 
 export async function deleteTemplate(id: string) {
+  const supabase = createClient()
   const { error } = await supabase
     .from('whatsapp_templates')
     .delete()
@@ -123,6 +127,7 @@ export async function sendMessage(params: {
   message_type?: 'text' | 'image' | 'document' | 'template'
   media_url?: string
 }) {
+  const supabase = createClient()
   const message = {
     tenant_id: params.tenant_id,
     customer_id: params.customer_id,
@@ -157,6 +162,7 @@ async function simulateSendWhatsApp(messageId: string) {
   // Simulate API delay
   await new Promise(resolve => setTimeout(resolve, 1000))
 
+  const supabase = createClient()
   // Update status to sent
   const { error } = await supabase
     .from('whatsapp_messages')
@@ -171,6 +177,7 @@ async function simulateSendWhatsApp(messageId: string) {
 }
 
 export async function getMessageHistory(customerId: string, limit = 50) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('whatsapp_messages')
     .select('*')
@@ -183,6 +190,7 @@ export async function getMessageHistory(customerId: string, limit = 50) {
 }
 
 export async function getMessageStats(tenantId: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('whatsapp_messages')
     .select('status')
@@ -203,6 +211,7 @@ export async function getMessageStats(tenantId: string) {
 
 // Quick send functions for common scenarios
 export async function sendRentalConfirmation(rentalId: string) {
+  const supabase = createClient()
   const { data: rental, error } = await supabase
     .from('rentals')
     .select('*, customer:customers(*), vehicle:vehicles(*)')
@@ -218,7 +227,7 @@ export async function sendRentalConfirmation(rentalId: string) {
   if (!template) throw new Error('No rental confirmation template found')
 
   const content = renderTemplate(template.body, {
-    customer_name: `${rental.customer.first_name} ${rental.customer.last_name}`,
+    customer_name: rental.customer.full_name,
     vehicle_make: rental.vehicle?.make || '',
     vehicle_model: rental.vehicle?.model || '',
     start_date: new Date(rental.start_date).toLocaleDateString('fr-FR'),
@@ -236,6 +245,7 @@ export async function sendRentalConfirmation(rentalId: string) {
 }
 
 export async function sendPaymentReminder(rentalId: string) {
+  const supabase = createClient()
   const { data: rental, error } = await supabase
     .from('rentals')
     .select('*, customer:customers(*), vehicle:vehicles(*)')
@@ -252,7 +262,7 @@ export async function sendPaymentReminder(rentalId: string) {
 
   const balance = rental.total_amount - (rental.paid_amount || 0)
   const content = renderTemplate(template.body, {
-    customer_name: `${rental.customer.first_name} ${rental.customer.last_name}`,
+    customer_name: rental.customer.full_name,
     amount: balance.toString(),
   })
 
@@ -266,6 +276,7 @@ export async function sendPaymentReminder(rentalId: string) {
 }
 
 export async function sendReturnReminder(rentalId: string) {
+  const supabase = createClient()
   const { data: rental, error } = await supabase
     .from('rentals')
     .select('*, customer:customers(*), vehicle:vehicles(*)')
@@ -281,7 +292,7 @@ export async function sendReturnReminder(rentalId: string) {
   if (!template) throw new Error('No return reminder template found')
 
   const content = renderTemplate(template.body, {
-    customer_name: `${rental.customer.first_name} ${rental.customer.last_name}`,
+    customer_name: rental.customer.full_name,
     vehicle_make: rental.vehicle?.make || '',
     vehicle_model: rental.vehicle?.model || '',
     return_date: new Date(rental.end_date).toLocaleDateString('fr-FR'),

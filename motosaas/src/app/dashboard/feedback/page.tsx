@@ -2,7 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import Link from 'next/link'
+import { PageTransition } from '@/components/PageTransition'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { ChevronUp, ChevronDown, Send, Filter } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { useI18n } from '@/lib/i18n'
 
 const TYPE_ICONS: Record<string, string> = {
   bug: '🐛',
@@ -12,15 +20,16 @@ const TYPE_ICONS: Record<string, string> = {
   other: '💬',
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  new: 'bg-blue-100 text-blue-800',
-  reviewing: 'bg-yellow-100 text-yellow-800',
-  planned: 'bg-purple-100 text-purple-800',
-  implemented: 'bg-green-100 text-green-800',
-  declined: 'bg-gray-100 text-gray-800',
+const STATUS_VARIANTS: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+  new: 'default',
+  reviewing: 'secondary',
+  planned: 'outline',
+  implemented: 'default',
+  declined: 'secondary',
 }
 
 export default function FeedbackPage() {
+  const { t } = useI18n()
   const [feedback, setFeedback] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -32,32 +41,57 @@ export default function FeedbackPage() {
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [tenantId, setTenantId] = useState<string | null>(null)
   const supabase = createClient()
 
-  useEffect(() => { fetchFeedback() }, [filter])
+  useEffect(() => {
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setLoading(false); return }
+      const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).single()
+      if (userData?.tenant_id) {
+        setTenantId(userData.tenant_id)
+        await fetchFeedback(userData.tenant_id)
+      } else {
+        setLoading(false)
+      }
+    }
+    init()
+  }, [filter])
 
-  async function fetchFeedback() {
+  async function fetchFeedback(tid?: string) {
     setLoading(true)
+    setError('')
 
-    let query = supabase
-      .from('feedback')
-      .select('*, user:users(full_name), votes:feedback_votes(vote)')
+    const id = tid || tenantId
+    if (!id) { setLoading(false); return }
 
-    if (filter !== 'all') {
-      query = query.eq('status', filter)
+    try {
+      let query = supabase
+        .from('feedback')
+        .select('*, user:users(full_name), votes:feedback_votes(vote)')
+        .eq('tenant_id', id)
+
+      if (filter !== 'all') {
+        query = query.eq('status', filter)
+      }
+
+      const { data, error: fetchError } = await query.order('created_at', { ascending: false })
+
+      if (fetchError) throw fetchError
+
+      if (data) {
+        const feedbackWithScore = data.map(f => ({
+          ...f,
+          score: (f.votes || []).reduce((sum: number, v: any) => sum + v.vote, 0),
+        }))
+        setFeedback(feedbackWithScore.sort((a, b) => b.score - a.score))
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load feedback')
+    } finally {
+      setLoading(false)
     }
-
-    const { data } = await query.order('created_at', { ascending: false })
-
-    if (data) {
-      const feedbackWithScore = data.map(f => ({
-        ...f,
-        score: (f.votes || []).reduce((sum: number, v: any) => sum + v.vote, 0),
-      }))
-      setFeedback(feedbackWithScore.sort((a, b) => b.score - a.score))
-    }
-
-    setLoading(false)
   }
 
   async function submitFeedback() {
@@ -77,7 +111,7 @@ export default function FeedbackPage() {
         .insert({
           tenant_id: userData.tenant_id,
           user_id: user.id,
-          type: newFeedback.type,
+          category: newFeedback.type,
           title: newFeedback.title,
           description: newFeedback.description,
         })
@@ -95,101 +129,102 @@ export default function FeedbackPage() {
   }
 
   async function vote(feedbackId: string, vote: number) {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
-    const { error } = await supabase
-      .from('feedback_votes')
-      .upsert({
-        feedback_id: feedbackId,
-        user_id: user.id,
-        vote,
-      })
+      const { data: userData } = await supabase
+        .from('users').select('tenant_id').eq('id', user.id).single()
+      if (!userData) return
 
-    if (!error) await fetchFeedback()
+      const { error } = await supabase
+        .from('feedback_votes')
+        .upsert({
+          feedback_id: feedbackId,
+          user_id: user.id,
+          tenant_id: userData.tenant_id,
+          vote,
+        })
+
+      if (!error) await fetchFeedback()
+    } catch (err: any) {
+      setError(err.message || 'Failed to vote')
+    }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center space-x-8">
-              <Link href="/dashboard" className="text-xl font-bold text-gray-900">MotoRent</Link>
-              <h1 className="text-lg font-medium">Feedback</h1>
-            </div>
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setShowForm(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Submit Feedback
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
-
+    <PageTransition>
       <main className="max-w-4xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{t('feedback.title')}</h1>
+            <p className="text-gray-600">{t('feedback.description')}</p>
+          </div>
+          <Button onClick={() => setShowForm(true)} className="bg-emerald-600 hover:bg-emerald-700">
+            <Send className="h-4 w-4 mr-2" />
+            {t('feedback.submit')}
+          </Button>
+        </div>
+
+        {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg mb-4">{error}</div>}
+
         {/* Form Modal */}
         {showForm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
               <div className="p-4 border-b">
-                <h3 className="font-medium">Submit Feedback</h3>
+                <h3 className="font-medium">{t('feedback.title')}</h3>
               </div>
               <div className="p-4 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                  <Label>Type</Label>
                   <select
                     value={newFeedback.type}
                     onChange={(e) => setNewFeedback({ ...newFeedback, type: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full h-8 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base md:text-sm"
                   >
-                    <option value="feature">Feature Request</option>
-                    <option value="bug">Bug Report</option>
-                    <option value="improvement">Improvement</option>
-                    <option value="question">Question</option>
-                    <option value="other">Other</option>
+                    <option value="feature">{t('feedback.feature_request')}</option>
+                    <option value="bug">{t('feedback.bug_report')}</option>
+                    <option value="improvement">{t('feedback.improvement')}</option>
+                    <option value="question">{t('feedback.question')}</option>
+                    <option value="other">{t('feedback.other')}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                  <input
+                  <Label>{t('feedback.title_label')}</Label>
+                  <Input
                     type="text"
                     value={newFeedback.title}
                     onChange={(e) => setNewFeedback({ ...newFeedback, title: e.target.value })}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Brief summary"
+                    placeholder={t('feedback.brief_summary')}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <Label>{t('feedback.description')}</Label>
                   <textarea
                     value={newFeedback.description}
                     onChange={(e) => setNewFeedback({ ...newFeedback, description: e.target.value })}
                     required
                     rows={4}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Please describe in detail..."
+                    className="w-full min-h-[80px] rounded-lg border border-input bg-transparent px-2.5 py-1 text-base md:text-sm placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                    placeholder={t('feedback.detail_desc')}
                   />
                 </div>
-                {error && <p className="text-red-600 text-sm">{error}</p>}
                 <div className="flex gap-2">
-                  <button
+                  <Button
                     onClick={submitFeedback}
                     disabled={saving || !newFeedback.title || !newFeedback.description}
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700"
                   >
-                    {saving ? 'Submitting...' : 'Submit'}
-                  </button>
-                  <button
+                    {saving ? t('common.loading') : t('feedback.submit')}
+                  </Button>
+                  <Button
+                    variant="outline"
                     onClick={() => { setShowForm(false); setError('') }}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                   >
-                    Cancel
-                  </button>
+                    {t('common.cancel')}
+                  </Button>
                 </div>
               </div>
             </div>
@@ -199,75 +234,80 @@ export default function FeedbackPage() {
         {/* Filters */}
         <div className="flex gap-2 mb-6 overflow-x-auto">
           {['all', 'new', 'reviewing', 'planned', 'implemented', 'declined'].map((status) => (
-            <button
+            <Button
               key={status}
+              variant={filter === status ? 'default' : 'outline'}
               onClick={() => setFilter(status)}
-              className={`px-4 py-2 rounded-lg whitespace-nowrap ${
-                filter === status
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white border border-gray-300 hover:bg-gray-50'
-              }`}
+              className={cn(
+                'whitespace-nowrap',
+                filter === status && 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              )}
             >
               {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
-            </button>
+            </Button>
           ))}
         </div>
 
         {/* Feedback List */}
         <div className="space-y-4">
           {loading ? (
-            <div className="text-center py-8">Loading...</div>
+            <div className="text-center py-8 text-gray-500">{t('common.loading')}</div>
           ) : feedback.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">No feedback found</div>
+            <div className="text-center py-8 text-gray-500">{t('feedback.no_feedback')}</div>
           ) : (
             feedback.map((item) => (
-              <div key={item.id} className="bg-white rounded-lg shadow p-4">
-                <div className="flex gap-4">
-                  {/* Vote buttons */}
-                  <div className="flex flex-col items-center gap-1">
-                    <button
-                      onClick={() => vote(item.id, 1)}
-                      className="text-gray-400 hover:text-green-600"
-                    >
-                      ▲
-                    </button>
-                    <span className={`font-medium ${item.score > 0 ? 'text-green-600' : item.score < 0 ? 'text-red-600' : 'text-gray-500'}`}>
-                      {item.score}
-                    </span>
-                    <button
-                      onClick={() => vote(item.id, -1)}
-                      className="text-gray-400 hover:text-red-600"
-                    >
-                      ▼
-                    </button>
-                  </div>
-
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span>{TYPE_ICONS[item.type]}</span>
-                      <h3 className="font-medium">{item.title}</h3>
-                      <span className={`px-2 py-0.5 text-xs rounded ${STATUS_COLORS[item.status]}`}>
-                        {item.status}
+              <Card key={item.id}>
+                <CardContent>
+                  <div className="flex gap-4">
+                    {/* Vote buttons */}
+                    <div className="flex flex-col items-center gap-1">
+                      <button
+                        onClick={() => vote(item.id, 1)}
+                        className="text-gray-400 hover:text-emerald-600"
+                      >
+                        <ChevronUp className="h-5 w-5" />
+                      </button>
+                      <span className={cn(
+                        'font-medium',
+                        item.score > 0 ? 'text-emerald-600' : item.score < 0 ? 'text-red-600' : 'text-gray-500'
+                      )}>
+                        {item.score}
                       </span>
+                      <button
+                        onClick={() => vote(item.id, -1)}
+                        className="text-gray-400 hover:text-red-600"
+                      >
+                        <ChevronDown className="h-5 w-5" />
+                      </button>
                     </div>
-                    <p className="text-gray-600 text-sm">{item.description}</p>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                      <span>By {item.user?.full_name || 'Unknown'}</span>
-                      <span>{new Date(item.created_at).toLocaleDateString('fr-FR')}</span>
-                    </div>
-                    {item.admin_response && (
-                      <div className="mt-3 p-3 bg-blue-50 rounded-lg">
-                        <p className="text-sm font-medium text-blue-800">Admin Response:</p>
-                        <p className="text-sm text-blue-700">{item.admin_response}</p>
+
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span>{TYPE_ICONS[item.type]}</span>
+                        <h3 className="font-medium">{item.title}</h3>
+                        <Badge variant={STATUS_VARIANTS[item.status] || 'outline'}>
+                          {item.status}
+                        </Badge>
                       </div>
-                    )}
+                      <p className="text-gray-600 text-sm">{item.description}</p>
+                      <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                        <span>By {item.user?.full_name || 'Unknown'}</span>
+                        <span>{new Date(item.created_at).toLocaleDateString('fr-FR')}</span>
+                      </div>
+                      {item.admin_response && (
+                        <div className="mt-3 p-3 bg-emerald-50 rounded-lg">
+                          <p className="text-sm font-medium text-emerald-800">Admin Response:</p>
+                          <p className="text-sm text-emerald-700">{item.admin_response}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             ))
           )}
         </div>
       </main>
-    </div>
+    </PageTransition>
   )
 }

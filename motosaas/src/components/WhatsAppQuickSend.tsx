@@ -1,17 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { sendMessage, sendRentalConfirmation, sendPaymentReminder, sendReturnReminder, openWhatsAppChat } from '@/lib/whatsapp'
+import { sendRentalConfirmation, sendPaymentReminder, sendReturnReminder, openWhatsAppChat } from '@/lib/whatsapp'
 
 interface WhatsAppQuickSendProps {
-  customerId: string
   customerPhone?: string
   rentalId?: string
-  tenantId: string
   onMessageSent?: () => void
 }
 
-export default function WhatsAppQuickSend({ customerId, customerPhone, rentalId, tenantId, onMessageSent }: WhatsAppQuickSendProps) {
+export default function WhatsAppQuickSend({ customerPhone, rentalId, onMessageSent }: WhatsAppQuickSendProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showOptions, setShowOptions] = useState(false)
@@ -42,8 +40,8 @@ export default function WhatsAppQuickSend({ customerId, customerPhone, rentalId,
       }
       onMessageSent?.()
       setShowOptions(false)
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
       setLoading(false)
     }
